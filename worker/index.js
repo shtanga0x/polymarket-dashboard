@@ -12,9 +12,9 @@
  *   POST /trigger-update?repo=...   → legacy param accepted, same effect
  *
  * Cron:
- *   Every 2 minutes. The full run completes well under that with the PnL
- *   cache warm, so the Actions concurrency queue stays empty (no cancelled
- *   runs piling up like the old 1-minute cadence caused).
+ *   Every minute. The full run completes in ~30-40s with the PnL cache
+ *   warm, so the Actions concurrency queue stays empty (unlike the old
+ *   pipeline, whose 4-minute runs piled up and got cancelled).
  */
 
 const COOLDOWN_MS = 60 * 1000; // 1 minute, for manual triggers

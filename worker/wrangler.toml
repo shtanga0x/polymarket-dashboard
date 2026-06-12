@@ -3,7 +3,7 @@ main = "index.js"
 compatibility_date = "2024-01-01"
 
 [triggers]
-crons = ["*/2 * * * *"]
+crons = ["* * * * *"]
 
 # Secrets (set with: wrangler secret put GITHUB_PAT)
 # GITHUB_PAT: fine-grained PAT with Actions: write on shtanga0x/polymarket-dashboard
