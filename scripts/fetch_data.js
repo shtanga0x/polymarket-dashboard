@@ -41,8 +41,10 @@ function ensureDir(dir) {
   }
 }
 
-function writeJSON(filepath, data) {
-  fs.writeFileSync(filepath, JSON.stringify(data, null, 2), 'utf-8');
+function writeJSON(filepath, data, { pretty = false } = {}) {
+  // Big data files ship minified: ~40% smaller, faster to parse for every
+  // consumer (frontend, Telegram bot). metadata.json stays human-readable.
+  fs.writeFileSync(filepath, JSON.stringify(data, null, pretty ? 2 : 0), 'utf-8');
   console.log(`Wrote: ${filepath}`);
 }
 
@@ -76,7 +78,7 @@ async function main() {
       console.log('Rotated: previous_portfolio.json');
     }
 
-    writeJSON(path.join(dataDir, 'metadata.json'), metadata);
+    writeJSON(path.join(dataDir, 'metadata.json'), metadata, { pretty: true });
     writeJSON(path.join(dataDir, 'aggregated_portfolio.json'), aggregatedPortfolio);
     writeJSON(path.join(dataDir, 'trader_portfolios.json'), traderPortfolios);
     writeJSON(path.join(dataDir, 'recent_changes.json'), recentChanges);
