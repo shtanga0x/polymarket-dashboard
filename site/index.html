@@ -115,9 +115,9 @@
               <th class="sortable">Traders</th>
               <th class="sortable">Exposure, $ / shares</th>
               <th>% Alloc</th>
-              <th class="sortable tooltip-header">&Delta; 1h<span class="header-info">last hour</span></th>
-              <th class="sortable tooltip-header">&Delta; 1h&rarr;1d<span class="header-info">1h&ndash;24h ago</span></th>
-              <th class="sortable tooltip-header">&Delta; 1d&rarr;1w<span class="header-info">1&ndash;7 days ago</span></th>
+              <th class="sortable tooltip-header">1h Change<span class="header-info">last hour</span></th>
+              <th class="sortable tooltip-header">1d Change<span class="header-info">1h&ndash;24h ago</span></th>
+              <th class="sortable tooltip-header">1w Change<span class="header-info">1&ndash;7 days ago</span></th>
               <th class="recent-changes-col">Recent changes</th>
             </tr>
           </thead>
@@ -241,9 +241,9 @@
                 <th>Your %</th>
                 <th>Model %</th>
                 <th id="traders-column-label">Traders</th>
-                <th class="tooltip-header">&Delta; 1h<span class="header-info">last hour</span></th>
-                <th class="tooltip-header">&Delta; 1h&rarr;1d<span class="header-info">1h&ndash;24h ago</span></th>
-                <th class="tooltip-header">&Delta; 1d&rarr;1w<span class="header-info">1&ndash;7 days ago</span></th>
+                <th class="tooltip-header">1h Change<span class="header-info">last hour</span></th>
+                <th class="tooltip-header">1d Change<span class="header-info">1h&ndash;24h ago</span></th>
+                <th class="tooltip-header">1w Change<span class="header-info">1&ndash;7 days ago</span></th>
               </tr>
             </thead>
             <tbody id="checker-tbody">
@@ -279,7 +279,7 @@
           <li><strong>Portfolio</strong> — the heart of the dashboard. Every market outcome held by
             tracked traders, aggregated: how many traders hold it, combined exposure ($ and shares),
             average entry price, % allocation, and chained momentum columns
-            (&Delta;&nbsp;1h, &Delta;&nbsp;1h&rarr;1d, &Delta;&nbsp;1d&rarr;1w). Sort by
+            (1h / 1d / 1w Change). Sort by
             any column; hover the change columns for a per-trader breakdown tooltip.</li>
           <li><strong>Recent Changes</strong> — the live feed of position changes: entries, exits,
             adds and trims, newest first. The <em>eye</em> icon in the Portfolio's last column filters
@@ -294,10 +294,10 @@
           <li><strong>Trader count beats raw exposure.</strong> $500k from one whale is one opinion;
             $50k from nine independent traders is consensus. Sort the Portfolio by Traders to surface it.</li>
           <li><strong>Momentum columns are chained, non-overlapping windows</strong>:
-            &Delta;&nbsp;1h covers the last hour, &Delta;&nbsp;1h&rarr;1d the day before it,
-            &Delta;&nbsp;1d&rarr;1w the week before that — each trade is counted in exactly one
+            1h Change covers the last hour, 1d Change the day before it (1h&ndash;24h ago),
+            1w Change the week before that (1&ndash;7 days ago) — each trade is counted in exactly one
             column, so you can read the evolution window by window (e.g. accumulated last week,
-            quiet yesterday, buying again this hour). Fresh money in &Delta;&nbsp;1h on a
+            quiet yesterday, buying again this hour). Fresh money in the 1h column on a
             previously quiet market is the classic early signal.</li>
           <li><strong>Balanced pairs filter</strong> — some traders hold both YES and NO of the same
             market (market-making / hedging, not directional opinion). The filter hides those so you
