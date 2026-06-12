@@ -271,24 +271,74 @@ export async function fetchRecentActivity(traders, config) {
 /**
  * Build 24h change map from activity
  */
-function build24hChangeMap(activity) {
+// Event types that move a position. REWARD/YIELD/MAKER_REBATE are cash-only
+// (no conditionId) and never affect position flow.
+const POSITION_EVENT_TYPES = new Set(['TRADE', 'REDEEM', 'MERGE', 'SPLIT', 'CONVERSION', 'CONVERT']);
+
+/**
+ * Index of which outcome(s) each trader holds per condition, built from the
+ * current AND previous run's portfolios. Used to attribute REDEEM / MERGE /
+ * CONVERSION events — the activity API reports them with outcomeIndex 999
+ * (unknown side), but the trader's portfolio tells us which side they held.
+ */
+function buildHeldOutcomesIndex(traderPortfolios, prevTraderPortfolios) {
+  const index = new Map();
+  for (const source of [prevTraderPortfolios, traderPortfolios]) {
+    if (!source) continue;
+    for (const [addr, p] of Object.entries(source)) {
+      for (const pos of p?.positions || []) {
+        if (pos.conditionId === undefined || pos.outcomeIndex === undefined) continue;
+        const key = `${addr.toLowerCase()}-${pos.conditionId}`;
+        let set = index.get(key);
+        if (!set) { set = new Set(); index.set(key, set); }
+        set.add(pos.outcomeIndex);
+      }
+    }
+  }
+  return index;
+}
+
+/**
+ * Resolve an activity event to per-outcome USD deltas.
+ *
+ * TRADE events carry their own outcomeIndex. REDEEM / MERGE / CONVERSION /
+ * SPLIT report outcomeIndex 999 — attribute them to the outcome(s) the
+ * trader holds (or held last run) for that condition; skip when unknown
+ * rather than guess and poison the other side's flow.
+ *
+ * @returns {Array<{outcomeIndex: number, delta: number}>}
+ */
+function eventOutcomeDeltas(a, heldOutcomes) {
+  if (a.type && !POSITION_EVENT_TYPES.has(a.type)) return [];
+  if (!a.conditionId) return [];
+  const usd = parseFloat(a.usdcSize || a.size || 0);
+  if (!usd) return [];
+
+  if (!a.type || a.type === 'TRADE') {
+    const idx = (a.outcomeIndex !== undefined && a.outcomeIndex !== 999)
+      ? a.outcomeIndex
+      : (a.outcome === 'Yes' ? 1 : 0);
+    return [{ outcomeIndex: idx, delta: a.side === 'BUY' ? usd : -usd }];
+  }
+
+  // SPLIT mints both sides (+); REDEEM/MERGE/CONVERSION close positions (−).
+  const sign = a.type === 'SPLIT' ? 1 : -1;
+  const held = heldOutcomes?.get(`${(a.traderAddress || a.proxyWallet || '').toLowerCase()}-${a.conditionId}`);
+  if (!held || held.size === 0) return [];
+  return Array.from(held).map(outcomeIndex => ({ outcomeIndex, delta: sign * usd }));
+}
+
+function build24hChangeMap(activity, heldOutcomes) {
   const now = Math.floor(Date.now() / 1000);
   const cutoff24h = now - 24 * 3600;
   const changeMap = new Map();
 
   for (const a of activity) {
     if ((a.timestamp || 0) < cutoff24h) continue;
-    if (a.type && a.type !== 'TRADE') continue;
-
-    // Create key matching position aggregation
-    const outcomeIdx = a.outcomeIndex !== undefined ? a.outcomeIndex : (a.outcome === 'Yes' ? 1 : 0);
-    const key = `${a.conditionId}-${outcomeIdx}`;
-
-    const delta = a.side === 'BUY'
-      ? parseFloat(a.usdcSize || a.size || 0)
-      : -parseFloat(a.usdcSize || a.size || 0);
-
-    changeMap.set(key, (changeMap.get(key) || 0) + delta);
+    for (const { outcomeIndex, delta } of eventOutcomeDeltas(a, heldOutcomes)) {
+      const key = `${a.conditionId}-${outcomeIndex}`;
+      changeMap.set(key, (changeMap.get(key) || 0) + delta);
+    }
   }
 
   return changeMap;
@@ -305,7 +355,7 @@ function build24hChangeMap(activity) {
  * @returns {Map<string, object>} key `${conditionId}-${outcomeIndex}` →
  *   { h1, d1, w1, t1h: Map<trader,delta>, t1d: Map, t1w: Map }
  */
-function buildWindowChangesMap(activity) {
+function buildWindowChangesMap(activity, heldOutcomes) {
   const now = Math.floor(Date.now() / 1000);
   const cutoff1h = now - 3600;
   const cutoff1d = now - 24 * 3600;
@@ -315,32 +365,28 @@ function buildWindowChangesMap(activity) {
   for (const a of activity) {
     const ts = a.timestamp || 0;
     if (ts < cutoff1w) continue;
-    if (a.type && a.type !== 'TRADE') continue;
 
-    // Create key matching position aggregation
-    const outcomeIdx = a.outcomeIndex !== undefined ? a.outcomeIndex : (a.outcome === 'Yes' ? 1 : 0);
-    const key = `${a.conditionId}-${outcomeIdx}`;
-
-    const delta = a.side === 'BUY'
-      ? parseFloat(a.usdcSize || a.size || 0)
-      : -parseFloat(a.usdcSize || a.size || 0);
     const trader = a.traderLabel || a.traderAddress?.slice(0, 10);
 
-    let entry = map.get(key);
-    if (!entry) {
-      entry = { h1: 0, d1: 0, w1: 0, t1h: new Map(), t1d: new Map(), t1w: new Map() };
-      map.set(key, entry);
-    }
+    for (const { outcomeIndex, delta } of eventOutcomeDeltas(a, heldOutcomes)) {
+      const key = `${a.conditionId}-${outcomeIndex}`;
 
-    if (ts >= cutoff1h) {
-      entry.h1 += delta;
-      entry.t1h.set(trader, (entry.t1h.get(trader) || 0) + delta);
-    } else if (ts >= cutoff1d) {
-      entry.d1 += delta;
-      entry.t1d.set(trader, (entry.t1d.get(trader) || 0) + delta);
-    } else {
-      entry.w1 += delta;
-      entry.t1w.set(trader, (entry.t1w.get(trader) || 0) + delta);
+      let entry = map.get(key);
+      if (!entry) {
+        entry = { h1: 0, d1: 0, w1: 0, t1h: new Map(), t1d: new Map(), t1w: new Map() };
+        map.set(key, entry);
+      }
+
+      if (ts >= cutoff1h) {
+        entry.h1 += delta;
+        entry.t1h.set(trader, (entry.t1h.get(trader) || 0) + delta);
+      } else if (ts >= cutoff1d) {
+        entry.d1 += delta;
+        entry.t1d.set(trader, (entry.t1d.get(trader) || 0) + delta);
+      } else {
+        entry.w1 += delta;
+        entry.t1w.set(trader, (entry.t1w.get(trader) || 0) + delta);
+      }
     }
   }
 
@@ -397,15 +443,15 @@ function loadPreviousPortfolio(dataDir) {
 /**
  * Aggregate positions across all traders
  */
-export function aggregatePortfolios(traderPortfolios, config, activity = [], dataDir = null) {
+export function aggregatePortfolios(traderPortfolios, config, activity = [], dataDir = null, heldOutcomes = null) {
   // Load previous trader counts for comparison
   const prevTraderCounts = dataDir ? loadPreviousPortfolio(dataDir) : new Map();
 
   // Build 24h change map from activity
-  const change24hMap = build24hChangeMap(activity);
+  const change24hMap = build24hChangeMap(activity, heldOutcomes);
 
   // Chained per-window aggregates (Δ1h / Δ1h→1d / Δ1d→1w) from full activity
-  const windowChangesMap = buildWindowChangesMap(activity);
+  const windowChangesMap = buildWindowChangesMap(activity, heldOutcomes);
 
   // Map: conditionId-outcome -> aggregated data
   const aggregated = new Map();
@@ -569,7 +615,15 @@ export function aggregatePortfolios(traderPortfolios, config, activity = [], dat
 /**
  * Process activity into recent changes format
  */
-export function processRecentChanges(activity, traderPortfolios, maxEvents = 2000) {
+const NON_TRADE_ACTIONS = {
+  REDEEM: 'redeemed',
+  MERGE: 'merged',
+  SPLIT: 'split',
+  CONVERSION: 'converted',
+  CONVERT: 'converted'
+};
+
+export function processRecentChanges(activity, traderPortfolios, maxEvents = 2000, heldOutcomes = null) {
   const now = Math.floor(Date.now() / 1000);
   const windows = {
     '1h': now - 3600,
@@ -582,46 +636,50 @@ export function processRecentChanges(activity, traderPortfolios, maxEvents = 200
   const windowSummaries = { '1h': 0, '6h': 0, '24h': 0, '7d': 0, '30d': 0 };
 
   const changes = activity
-    .filter(a => a.type === 'TRADE' || !a.type) // Focus on trades
-    .map(a => {
-      const delta = a.side === 'BUY'
-        ? parseFloat(a.usdcSize || a.size || 0)
-        : -parseFloat(a.usdcSize || a.size || 0);
-
-      // Update window summaries
+    .flatMap(a => {
       const ts = a.timestamp || 0;
-      for (const [window, threshold] of Object.entries(windows)) {
-        if (ts >= threshold) {
-          windowSummaries[window] += delta;
+      const isTrade = !a.type || a.type === 'TRADE';
+
+      return eventOutcomeDeltas(a, heldOutcomes).map(({ outcomeIndex, delta }) => {
+        // Update window summaries
+        for (const [window, threshold] of Object.entries(windows)) {
+          if (ts >= threshold) {
+            windowSummaries[window] += delta;
+          }
         }
-      }
 
-      // Determine action type
-      let action = 'unknown';
-      if (a.side === 'BUY') action = 'increased';
-      else if (a.side === 'SELL') action = 'decreased';
+        // Determine action type
+        let action = 'unknown';
+        if (isTrade) {
+          if (a.side === 'BUY') action = 'increased';
+          else if (a.side === 'SELL') action = 'decreased';
+        } else {
+          action = NON_TRADE_ACTIONS[a.type] || 'unknown';
+        }
 
-      // Determine outcome
-      let outcome = a.outcome || '';
-      if (!outcome && a.outcomeIndex !== undefined) {
-        outcome = a.outcomeIndex === 0 ? 'No' : 'Yes';
-      }
+        // Determine outcome name. Non-trade events report outcome '' /
+        // index 999 — leave the name to the event when it has one.
+        let outcome = a.outcome || '';
+        if (!outcome && isTrade && a.outcomeIndex !== undefined) {
+          outcome = a.outcomeIndex === 0 ? 'No' : 'Yes';
+        }
 
-      return {
-        timestamp: ts,
-        trader: a.traderLabel || a.proxyWallet?.slice(0, 10),
-        traderAddress: a.traderAddress || a.proxyWallet,
-        market: a.title || 'Unknown Market',
-        marketSlug: a.slug || '',
-        eventSlug: a.eventSlug || '',
-        conditionId: a.conditionId || '',
-        outcome: outcome,
-        outcomeIndex: a.outcomeIndex,
-        action,
-        delta: Math.round(delta * 100) / 100,
-        size: parseFloat(a.size || 0),
-        price: parseFloat(a.price || 0)
-      };
+        return {
+          timestamp: ts,
+          trader: a.traderLabel || a.proxyWallet?.slice(0, 10),
+          traderAddress: a.traderAddress || a.proxyWallet,
+          market: a.title || 'Unknown Market',
+          marketSlug: a.slug || '',
+          eventSlug: a.eventSlug || '',
+          conditionId: a.conditionId || '',
+          outcome: outcome,
+          outcomeIndex,
+          action,
+          delta: Math.round(delta * 100) / 100,
+          size: parseFloat(a.size || 0),
+          price: parseFloat(a.price || 0)
+        };
+      });
     });
 
   // Round summaries
@@ -655,9 +713,16 @@ export async function computeAll({ config, dataDir, rootDir }) {
     fetchRecentActivity(traders, config)
   ]);
 
+  // Attribution index for REDEEM/MERGE/CONVERSION events (outcomeIndex 999):
+  // current + previous run portfolios tell us which side each trader held.
+  const heldOutcomes = buildHeldOutcomesIndex(
+    traderPortfolios,
+    loadPreviousTraderPortfolios(dataDir)
+  );
+
   // Aggregate - pass activity for 24h change calculation
-  const aggregatedPortfolio = aggregatePortfolios(traderPortfolios, config, activity, dataDir);
-  const recentChanges = processRecentChanges(activity, traderPortfolios, config.max_recent_events || 2000);
+  const aggregatedPortfolio = aggregatePortfolios(traderPortfolios, config, activity, dataDir, heldOutcomes);
+  const recentChanges = processRecentChanges(activity, traderPortfolios, config.max_recent_events || 2000, heldOutcomes);
 
   // Update 24h flow in summary
   aggregatedPortfolio.summary.netFlow24h = recentChanges.windowSummaries['24h'];
