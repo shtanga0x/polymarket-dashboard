@@ -65,9 +65,13 @@ jobs:
           SRC="out/$SITE/data"
           DST="s3://polymarket-data/$SITE"
 
-          # 1. Immutable snapshot — readers cache these forever.
+          # 1. Immutable snapshot — readers cache these forever. Only the
+          #    files the frontend fetches per snapshot; previous_portfolio
+          #    and bot_feed are read from flat paths only (saves ~350k R2
+          #    class-A ops/month at 1-min cadence — free tier is 1M).
           aws s3 cp "$SRC/" "$DST/snap/$SNAPSHOT_ID/" \
             --recursive --exclude "metadata.json" \
+            --exclude "previous_portfolio.json" --exclude "bot_feed.json" \
             --endpoint-url "$R2_ENDPOINT" \
             --checksum-algorithm CRC32 \
             --cache-control "public, max-age=31536000, immutable"
