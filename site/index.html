@@ -112,7 +112,7 @@
               <th>Side</th>
               <th class="sortable">Expiration</th>
               <th>Avg Entry</th>
-              <th class="sortable">Traders</th>
+              <th class="sortable tooltip-header" title="Traders currently holding this outcome. (+entered/&minus;exited) over the last 24h.">Traders<span class="header-info">&plusmn;24h in/out</span></th>
               <th class="sortable">Exposure, $ / shares</th>
               <th>% Alloc</th>
               <th class="sortable tooltip-header">1h Change<span class="header-info">last hour</span></th>
@@ -292,7 +292,10 @@
         <h3>What to pay attention to</h3>
         <ul>
           <li><strong>Trader count beats raw exposure.</strong> $500k from one whale is one opinion;
-            $50k from nine independent traders is consensus. Sort the Portfolio by Traders to surface it.</li>
+            $50k from nine independent traders is consensus. Sort the Portfolio by Traders to surface it.
+            The Traders column also shows the last 24h of churn — e.g. <em>6&nbsp;(+2/&minus;1)</em>
+            means 6 holders now, 2 entered and 1 exited within 24h. Fresh entries are the
+            strongest version of the consensus signal.</li>
           <li><strong>Momentum columns are chained, non-overlapping windows</strong>:
             1h Change covers the last hour, 1d Change the day before it (1h&ndash;24h ago),
             1w Change the week before that (1&ndash;7 days ago) — each trade is counted in exactly one

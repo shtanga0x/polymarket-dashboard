@@ -673,13 +673,14 @@ function renderOutcomeRow(outcome, totalExposure, isFirst, rowSpanCount, marketI
     `;
   }
 
-  // Format trader count with change indicator
-  const traderChange = outcome.traderCountChange || 0;
+  // Format trader count with the 24h entered/exited counter, e.g. "6 (+2/−1)"
+  const flow = outcome.traderFlow24h;
   let traderCountHtml = `${outcome.traderCount}`;
-  if (traderChange !== 0) {
-    const changeClass = traderChange > 0 ? 'positive' : 'negative';
-    const changeSign = traderChange > 0 ? '+' : '';
-    traderCountHtml = `${outcome.traderCount} <span class="${changeClass}">(${changeSign}${traderChange})</span>`;
+  if (flow && (flow.entered || flow.exited)) {
+    const parts = [];
+    if (flow.entered) parts.push(`<span class="positive">+${flow.entered}</span>`);
+    if (flow.exited) parts.push(`<span class="negative">&minus;${flow.exited}</span>`);
+    traderCountHtml = `${outcome.traderCount} <span class="trader-flow">(${parts.join('/')})</span>`;
   }
 
   // Calculate allocation % for this outcome
@@ -766,7 +767,7 @@ function portfolioTheadHTML() {
       <th>Side</th>
       <th class="sortable" onclick="handlePortfolioSort('endDate')">Expiration${getSortIndicator('endDate')}</th>
       <th>Avg Entry</th>
-      <th class="sortable" onclick="handlePortfolioSort('traderCount')">Traders${getSortIndicator('traderCount')}</th>
+      <th class="sortable tooltip-header" onclick="handlePortfolioSort('traderCount')" title="Traders currently holding this outcome. (+entered/&minus;exited) over the last 24h.">Traders${getSortIndicator('traderCount')}<span class="header-info">&plusmn;24h in/out</span></th>
       <th class="sortable" onclick="handlePortfolioSort('totalExposure')">Exposure, $ / shares${getSortIndicator('totalExposure')}</th>
       <th>% Alloc</th>
       <th class="sortable tooltip-header" onclick="handlePortfolioSort('change1h')">1h Change${getSortIndicator('change1h')}<span class="header-info">last hour</span></th>
