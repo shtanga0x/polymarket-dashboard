@@ -1,0 +1,98 @@
+name: Update Polymarket Data
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'   # fallback; the Cloudflare worker dispatches every 2 min
+  repository_dispatch:
+    types: [manual-refresh]
+  workflow_dispatch:
+
+concurrency:
+  group: update-polymarket-data
+  cancel-in-progress: false
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        site: [core, watch]
+    env:
+      SITE: ${{ matrix.site }}
+      SNAPSHOT_ID: ${{ github.run_id }}
+      AWS_ACCESS_KEY_ID:     ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_ENDPOINT:           ${{ secrets.R2_ENDPOINT }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download previous run state from R2
+        # Recent-changes diffing and the PnL scrape cache compare against the
+        # PREVIOUS run. Files in git are not updated by CI, so the live copies
+        # must come down from R2. Missing files (first run) are non-fatal.
+        run: |
+          mkdir -p "out/$SITE/data"
+          for f in aggregated_portfolio.json trader_portfolios.json; do
+            aws s3 cp "s3://polymarket-data/$SITE/$f" "out/$SITE/data/$f" \
+              --endpoint-url "$R2_ENDPOINT" || echo "No previous $f (first run?)"
+          done
+
+      - name: Fetch Polymarket data
+        run: node scripts/fetch_data.js --site "$SITE"
+        env:
+          NODE_OPTIONS: '--max-old-space-size=1024'
+          # Datacenter proxies for rate-limit avoidance (optional).
+          # Format per line: host:port:username:password
+          # Set via: gh secret set PROXIES < proxies.txt
+          PROXIES: ${{ secrets.PROXIES }}
+
+      - name: Upload data to R2 (atomic snapshot, then pointer flip)
+        run: |
+          set -euo pipefail
+          SRC="out/$SITE/data"
+          DST="s3://polymarket-data/$SITE"
+
+          # 1. Immutable snapshot — readers cache these forever.
+          aws s3 cp "$SRC/" "$DST/snap/$SNAPSHOT_ID/" \
+            --recursive --exclude "metadata.json" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --checksum-algorithm CRC32 \
+            --cache-control "public, max-age=31536000, immutable"
+
+          # 2. Flat copies — backward compatibility + previous-state source
+          #    for the next run.
+          aws s3 cp "$SRC/" "$DST/" \
+            --recursive --exclude "metadata.json" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --checksum-algorithm CRC32 \
+            --cache-control "public, max-age=60"
+
+          # 3. metadata.json LAST — the atomic pointer flip. Until this lands,
+          #    readers keep using the previous complete snapshot.
+          aws s3 cp "$SRC/metadata.json" "$DST/metadata.json" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --checksum-algorithm CRC32 \
+            --cache-control "public, max-age=15"
+
+      - name: Prune old snapshots (keep newest 5)
+        run: |
+          set -euo pipefail
+          aws s3 ls "s3://polymarket-data/$SITE/snap/" --endpoint-url "$R2_ENDPOINT" \
+            | awk '{print $2}' | tr -d '/' | sort -n | head -n -5 \
+            | while read -r old; do
+                [ -n "$old" ] && aws s3 rm "s3://polymarket-data/$SITE/snap/$old/" \
+                  --recursive --endpoint-url "$R2_ENDPOINT"
+              done
