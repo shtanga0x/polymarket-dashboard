@@ -769,9 +769,9 @@ function portfolioTheadHTML() {
       <th class="sortable" onclick="handlePortfolioSort('traderCount')">Traders${getSortIndicator('traderCount')}</th>
       <th class="sortable" onclick="handlePortfolioSort('totalExposure')">Exposure, $ / shares${getSortIndicator('totalExposure')}</th>
       <th>% Alloc</th>
-      <th class="sortable tooltip-header" onclick="handlePortfolioSort('change1h')">1h Change${getSortIndicator('change1h')}<span class="header-info">Hover for details</span></th>
-      <th class="sortable tooltip-header" onclick="handlePortfolioSort('change1d')">1d Change${getSortIndicator('change1d')}<span class="header-info">Hover for details</span></th>
-      <th class="sortable tooltip-header" onclick="handlePortfolioSort('change1w')">1w Change${getSortIndicator('change1w')}<span class="header-info">Hover for details</span></th>
+      <th class="sortable tooltip-header" onclick="handlePortfolioSort('change1h')">&Delta; 1h${getSortIndicator('change1h')}<span class="header-info">last hour</span></th>
+      <th class="sortable tooltip-header" onclick="handlePortfolioSort('change1d')">&Delta; 1h&rarr;1d${getSortIndicator('change1d')}<span class="header-info">1h&ndash;24h ago</span></th>
+      <th class="sortable tooltip-header" onclick="handlePortfolioSort('change1w')">&Delta; 1d&rarr;1w${getSortIndicator('change1w')}<span class="header-info">1&ndash;7 days ago</span></th>
       <th class="recent-changes-col"><span class="recent-changes-th" title="Recent changes">${EYE_ICON}</span></th>
     </tr>
   `;
@@ -1609,7 +1609,34 @@ async function fetchCheckerPnL(address) {
 /**
  * Calculate time-windowed changes for a position from recent changes data
  */
+// Lookup of server-precomputed chained window changes, rebuilt per snapshot.
+let windowChangesIndex = null;
+let windowChangesIndexSource = null;
+
+function getWindowChangesIndex() {
+  if (windowChangesIndexSource !== aggregatedPortfolio) {
+    windowChangesIndex = new Map();
+    windowChangesIndexSource = aggregatedPortfolio;
+    for (const p of aggregatedPortfolio?.positions || []) {
+      if (p.windowChanges) {
+        windowChangesIndex.set(`${p.conditionId}-${p.outcomeIndex}`, p.windowChanges);
+      }
+    }
+  }
+  return windowChangesIndex;
+}
+
 function calculatePositionChanges(conditionId, outcomeIndex) {
+  // Prefer server-precomputed windows: they are built from the FULL activity
+  // history (recent_changes.json is capped and may only cover a few hours).
+  const pre = getWindowChangesIndex().get(`${conditionId}-${outcomeIndex}`);
+  if (pre) {
+    return {
+      h1: pre.h1 || 0, d1: pre.d1 || 0, w1: pre.w1 || 0,
+      h1Details: pre.h1Details || [], d1Details: pre.d1Details || [], w1Details: pre.w1Details || []
+    };
+  }
+
   if (!recentChanges?.changes) return { h1: 0, d1: 0, w1: 0, h1Details: [], d1Details: [], w1Details: [] };
 
   const now = Date.now() / 1000;
@@ -1633,21 +1660,20 @@ function calculatePositionChanges(conditionId, outcomeIndex) {
 
     const ts = c.timestamp || 0;
     const delta = c.delta || 0;
+    const trader = c.trader || c.traderAddress?.slice(0, 10);
 
-    if (ts >= cutoff1w) {
-      w1 += delta;
-      const trader = c.trader || c.traderAddress?.slice(0, 10);
-      traderChanges1w.set(trader, (traderChanges1w.get(trader) || 0) + delta);
-    }
-    if (ts >= cutoff1d) {
-      d1 += delta;
-      const trader = c.trader || c.traderAddress?.slice(0, 10);
-      traderChanges1d.set(trader, (traderChanges1d.get(trader) || 0) + delta);
-    }
+    // Chained, non-overlapping windows — each event counts in exactly one
+    // column, so every column shows what happened WITHIN its own window:
+    //   1h = (now-1h, now], 1d = (now-1d, now-1h], 1w = (now-1w, now-1d]
     if (ts >= cutoff1h) {
       h1 += delta;
-      const trader = c.trader || c.traderAddress?.slice(0, 10);
       traderChanges1h.set(trader, (traderChanges1h.get(trader) || 0) + delta);
+    } else if (ts >= cutoff1d) {
+      d1 += delta;
+      traderChanges1d.set(trader, (traderChanges1d.get(trader) || 0) + delta);
+    } else if (ts >= cutoff1w) {
+      w1 += delta;
+      traderChanges1w.set(trader, (traderChanges1w.get(trader) || 0) + delta);
     }
   }
 
