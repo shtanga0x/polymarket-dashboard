@@ -14,7 +14,7 @@
     <header>
       <div class="header-content">
         <h1 id="site-title"></h1>
-        <p class="subtitle">Tracking top Polymarket traders — auto-updates every minute</p>
+        <p class="subtitle">Tracking top Polymarket traders</p>
         <div class="header-actions">
           <a class="channel-link" href="https://t.me/shtanga0x" target="_blank" rel="noopener noreferrer" title="Open Shtanga channel"><svg class="channel-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.78 15.38 9.4 20.7c.54 0 .78-.23 1.06-.51l2.55-2.44 5.28 3.87c.97.54 1.65.26 1.91-.89l3.46-16.2c.31-1.43-.51-1.99-1.45-1.64L1.88 10.74C.49 11.28.51 12.06 1.65 12.41l5.2 1.62L18.93 6.47c.57-.38 1.09-.17.66.21l-9.81 8.7Z"/></svg>shtanga0x</a>
           <button id="theme-toggle" class="theme-toggle" title="Toggle light/dark mode">☀</button>
@@ -306,7 +306,7 @@
 
         <h3>Architecture (for the curious)</h3>
         <ul>
-          <li><strong>Pipeline</strong> — a GitHub Actions job runs every couple of minutes:
+          <li><strong>Pipeline</strong> — a GitHub Actions job runs every minute:
             it pulls each tracked wallet's positions, balances and activity from the Polymarket APIs
             (through rotating proxies, with retries), scrapes all-time PnL (cached ~1h),
             aggregates everything, and diffs against the previous run to produce the Recent Changes feed.</li>
@@ -324,17 +324,39 @@
 
         <h3>Caveats</h3>
         <ul>
-          <li>Data is delayed by up to a few minutes — this is a research tool, not an execution feed.</li>
-          <li>Tracked traders can be wrong, early, or hedged elsewhere. Consensus reduces but never removes risk.</li>
-          <li>PnL figures come from Polymarket's own profile stats; freshly scraped values can lag by up to an hour.</li>
+          <li><strong>This is a research tool, not an execution feed.</strong> Data is delayed by up to
+            a few minutes; by the time you see a move, prices may have already adjusted.</li>
+          <li><strong>Survivorship and selection bias.</strong> Traders are added because they performed
+            well in the past — past performance does not guarantee they keep performing. The list is
+            curated by a human and can simply be wrong.</li>
+          <li><strong>Consensus is signal, not certainty.</strong> Tracked traders can be wrong together
+            (shared narratives, copycat flows), early, or hedged on venues this dashboard can't see.</li>
+          <li><strong>Position ≠ opinion.</strong> A position can be a hedge, market-making inventory, an
+            exit in progress, or a leg of a structure. The balanced-pairs filter catches the obvious
+            cases, not all of them.</li>
+          <li><strong>Numbers are best-effort.</strong> PnL comes from Polymarket's own profile stats and
+            can lag up to an hour; exposure uses current market prices, which move; API hiccups can
+            briefly under-count a trader.</li>
+          <li><strong>Thin markets distort.</strong> In low-liquidity markets a single tracked trader can
+            be most of the volume — "3 traders, $80k" means little if the whole book is $100k.</li>
         </ul>
+
+        <h3>Disclaimer</h3>
+        <p>
+          <strong>NFA — nothing here is financial advice.</strong> This dashboard is an informational
+          aggregation of publicly available on-chain and Polymarket data, provided as-is, with no
+          guarantees of accuracy, completeness, or timeliness. Nothing on this site is a recommendation
+          to buy, sell, or hold any position. Copy-trading strangers is a fast way to lose money.
+          Prediction markets are risky and may be restricted in your jurisdiction — know your local rules.
+          <strong>DYOR — do your own research</strong> and never risk funds you cannot afford to lose.
+        </p>
 
       </div>
     </section>
   </main>
 
   <footer>
-    <p>Data auto-updates every couple of minutes</p>
+    <p>Data auto-updates every minute</p>
     <p><a id="github-link" href="#" target="_blank">View on GitHub</a></p>
   </footer>
 
