@@ -83,6 +83,41 @@ async function main() {
     writeJSON(path.join(dataDir, 'trader_portfolios.json'), traderPortfolios);
     writeJSON(path.join(dataDir, 'recent_changes.json'), recentChanges);
 
+    // Slim feed for the Telegram bot: top positions with only the fields it
+    // reads (~100KB vs multi-MB full files — the bot runs on a tight Workers
+    // CPU budget and must not parse the big JSONs).
+    const botFeed = {
+      last_updated: metadata.last_updated,
+      summary: { totalExposure: aggregatedPortfolio.summary?.totalExposure ?? 0 },
+      positions: (aggregatedPortfolio.positions || []).slice(0, 400).map(p => ({
+        conditionId: p.conditionId,
+        outcomeIndex: p.outcomeIndex,
+        outcome: p.outcome,
+        title: p.title,
+        slug: p.slug,
+        eventSlug: p.eventSlug,
+        endDate: p.endDate,
+        totalExposure: p.totalExposure,
+        totalSize: p.totalSize,
+        traderCount: p.traderCount,
+        avgEntry: p.avgEntry,
+        curPrice: p.curPrice,
+        priceChangePct: p.priceChangePct,
+        ...(p.windowChanges
+          ? { windowChanges: { h1: p.windowChanges.h1, d1: p.windowChanges.d1, w1: p.windowChanges.w1 } }
+          : {})
+      })),
+      // Minimal change events — fallback delta source for positions that
+      // dropped out of the portfolio (no windowChanges available).
+      changes: (recentChanges.changes || []).slice(0, 600).map(c => ({
+        conditionId: c.conditionId,
+        outcomeIndex: c.outcomeIndex,
+        timestamp: c.timestamp,
+        delta: c.delta
+      }))
+    };
+    writeJSON(path.join(dataDir, 'bot_feed.json'), botFeed);
+
     console.log('\n═══════════════════════════════════════════════════════');
     console.log('  Summary');
     console.log('═══════════════════════════════════════════════════════');
