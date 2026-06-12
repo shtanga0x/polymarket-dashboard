@@ -1,0 +1,48 @@
+name: Deploy site to R2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - 'config/*.json'
+      - 'scripts/build_site_config.js'
+      - '.github/workflows/deploy-site.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        site: [core, watch]
+    env:
+      SITE: ${{ matrix.site }}
+      AWS_ACCESS_KEY_ID:     ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_ENDPOINT:           ${{ secrets.R2_ENDPOINT }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Generate per-site config
+        run: node scripts/build_site_config.js "$SITE"
+
+      - name: Sync site to R2
+        run: |
+          set -euo pipefail
+          BUCKET=$(node -e "console.log(JSON.parse(require('fs').readFileSync('config/$SITE.json')).r2_site_bucket)")
+          aws s3 sync site/ "$BUCKET/" \
+            --exclude "data/*" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --checksum-algorithm CRC32 \
+            --cache-control "public, max-age=60" \
+            --delete

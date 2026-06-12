@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Polymarket Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css?v=unified-20260612">
+</head>
+<body>
+  <div class="top-shell">
+    <header>
+      <div class="header-content">
+        <h1 id="site-title"></h1>
+        <p class="subtitle">Tracking top Polymarket traders — auto-updates every minute</p>
+        <div class="header-actions">
+          <a class="channel-link" href="https://t.me/shtanga0x" target="_blank" rel="noopener noreferrer" title="Open Shtanga channel"><svg class="channel-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.78 15.38 9.4 20.7c.54 0 .78-.23 1.06-.51l2.55-2.44 5.28 3.87c.97.54 1.65.26 1.91-.89l3.46-16.2c.31-1.43-.51-1.99-1.45-1.64L1.88 10.74C.49 11.28.51 12.06 1.65 12.41l5.2 1.62L18.93 6.47c.57-.38 1.09-.17.66.21l-9.81 8.7Z"/></svg>shtanga0x</a>
+          <button id="theme-toggle" class="theme-toggle" title="Toggle light/dark mode">☀</button>
+        </div>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-section="traders">Traders</button>
+      <button class="tab" data-section="portfolio">Portfolio</button>
+      <button class="tab" data-section="changes">Recent Changes</button>
+      <button class="tab" data-section="checker">Checker</button>
+      <button class="tab" data-section="docs">Docs</button>
+      <div id="last-updated" class="last-updated">
+        <span class="status-dot"></span>
+        <span class="timestamp">Loading...</span>
+        <button id="refresh-btn" class="refresh-btn" title="Reload snapshot">&#8635;</button>
+      </div>
+    </nav>
+  </div>
+
+  <main>
+    <!-- Section 1: Traders List -->
+    <section id="traders-section" class="section active">
+      <div class="section-header">
+        <h2 id="tracked-traders-title">Tracked Traders</h2>
+        <div class="search-box">
+          <input type="text" id="trader-search" placeholder="Search traders...">
+        </div>
+      </div>
+      <div class="table-container">
+        <table id="traders-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Trader</th>
+              <th>Portfolio Value</th>
+              <th>USDC Balance</th>
+              <th>All Time PnL</th>
+              <th>Positions</th>
+              <th>Wallet</th>
+            </tr>
+          </thead>
+          <tbody id="traders-tbody">
+            <tr><td colspan="7" class="loading">Loading traders...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Section 2: Aggregated Portfolio -->
+    <section id="portfolio-section" class="section">
+      <div class="section-header">
+        <h2>Aggregated Portfolio</h2>
+        <div class="portfolio-actions">
+          <span class="filter-tooltip" data-tooltip="Hide near-balanced YES/NO positions (<10% share gap).">
+            <button id="balanced-filter-btn" class="icon-toggle-btn" type="button" aria-pressed="false" aria-label="Hide near-balanced positions"></button>
+          </span>
+        </div>
+      </div>
+
+      <div class="summary-cards" id="portfolio-summary">
+        <div class="card">
+          <div class="card-label">Total Exposure</div>
+          <div class="card-value" id="total-exposure">$0</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Relative Exposure</div>
+          <div class="card-value" id="relative-exposure">0%</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Distinct Markets</div>
+          <div class="card-value" id="distinct-markets">0</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Top 1 Concentration</div>
+          <div class="card-value" id="top1-share">0%</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Top 5 Concentration</div>
+          <div class="card-value" id="top5-share">0%</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Net Flow 24h</div>
+          <div class="card-value" id="net-flow-24h">$0</div>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table id="portfolio-table" class="portfolio-style-table">
+          <thead id="portfolio-thead">
+            <tr>
+              <th>#</th>
+              <th class="sortable">Market</th>
+              <th>Side</th>
+              <th class="sortable">Expiration</th>
+              <th>Avg Entry</th>
+              <th class="sortable">Traders</th>
+              <th class="sortable">Exposure, $ / shares</th>
+              <th>% Alloc</th>
+              <th class="sortable tooltip-header">1h Change<span class="header-info">Hover for details</span></th>
+              <th class="sortable tooltip-header">1d Change<span class="header-info">Hover for details</span></th>
+              <th class="sortable tooltip-header">1w Change<span class="header-info">Hover for details</span></th>
+              <th class="recent-changes-col">Recent changes</th>
+            </tr>
+          </thead>
+          <tbody id="portfolio-tbody">
+            <tr><td colspan="12" class="loading">Loading portfolio...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Section 3: Recent Changes -->
+    <section id="changes-section" class="section">
+      <div class="section-header">
+        <h2>Recent Portfolio Changes</h2>
+        <div class="filters">
+          <select id="delta-filter">
+            <option value="0">All changes</option>
+            <option value="1000">&gt;$1,000 change</option>
+            <option value="5000">&gt;$5,000 change</option>
+            <option value="10000">&gt;$10,000 change</option>
+          </select>
+          <button id="aggregate-toggle" type="button" class="filter-btn" title="Show filtered changes as a portfolio-style aggregate">⊕ Aggregate</button>
+          <select id="time-filter">
+            <option value="all">All time</option>
+            <option value="1h">Last 1h</option>
+            <option value="6h">Last 6h</option>
+            <option value="24h">Last 24h</option>
+            <option value="7d">Last 7d</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="event-filter-bar" class="event-filter-bar" style="display: none;">
+        <span class="event-filter-label">Showing recent changes for: <strong id="event-filter-name"></strong></span>
+        <button id="clear-event-filter" type="button" class="filter-btn clear-filter-btn">✕ Clear filters</button>
+      </div>
+
+      <div class="summary-cards" id="changes-summary">
+        <div class="card">
+          <div class="card-label">1h Flow</div>
+          <div class="card-value" id="flow-1h">$0</div>
+        </div>
+        <div class="card">
+          <div class="card-label">6h Flow</div>
+          <div class="card-value" id="flow-6h">$0</div>
+        </div>
+        <div class="card">
+          <div class="card-label">24h Flow</div>
+          <div class="card-value" id="flow-24h">$0</div>
+        </div>
+        <div class="card">
+          <div class="card-label">7d Flow</div>
+          <div class="card-value" id="flow-7d">$0</div>
+        </div>
+        <div class="card">
+          <div class="card-label">30d Flow</div>
+          <div class="card-value" id="flow-30d">$0</div>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table id="changes-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Trader</th>
+              <th>Market</th>
+              <th>Side</th>
+              <th>Avg Entry</th>
+              <th>Action</th>
+              <th>Delta</th>
+              <th>Size</th>
+            </tr>
+          </thead>
+          <tbody id="changes-tbody">
+            <tr><td colspan="8" class="loading">Loading changes...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Section 4: Checker -->
+    <section id="checker-section" class="section">
+      <div class="section-header">
+        <h2>Portfolio Checker</h2>
+      </div>
+
+      <div class="checker-input-container">
+        <input type="text" id="checker-address" placeholder="Enter Polymarket address (0x...)">
+        <button id="checker-btn" class="btn btn-primary">Check Portfolio</button>
+      </div>
+
+      <div id="checker-results" class="checker-results" style="display: none;">
+        <div class="summary-cards" id="checker-summary">
+          <div class="card">
+            <div class="card-label">Portfolio Size</div>
+            <div class="card-value" id="checker-portfolio-size">$0</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Total Exposure</div>
+            <div class="card-value" id="checker-exposure">$0</div>
+          </div>
+          <div class="card">
+            <div class="card-label">USDC Balance</div>
+            <div class="card-value" id="checker-usdc">$0</div>
+          </div>
+          <div class="card">
+            <div class="card-label">All Time PnL</div>
+            <div class="card-value" id="checker-pnl">$0</div>
+          </div>
+        </div>
+
+        <h3 class="checker-subtitle">Position Comparison with Model Portfolio</h3>
+        <div class="table-container">
+          <table id="checker-table">
+            <thead>
+              <tr>
+                <th>Market</th>
+                <th>Side</th>
+                <th>Your Exposure</th>
+                <th>Your %</th>
+                <th>Model %</th>
+                <th id="traders-column-label">Traders</th>
+                <th class="tooltip-header">1h Change<span class="header-info">Hover for details</span></th>
+                <th class="tooltip-header">1d Change<span class="header-info">Hover for details</span></th>
+                <th class="tooltip-header">1w Change<span class="header-info">Hover for details</span></th>
+              </tr>
+            </thead>
+            <tbody id="checker-tbody">
+              <tr><td colspan="9" class="loading">Enter an address to check</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 5: Docs -->
+    <section id="docs-section" class="section">
+      <div class="section-header">
+        <h2>How this dashboard works</h2>
+      </div>
+      <div class="docs-content">
+
+        <h3>What you're looking at</h3>
+        <p>
+          This dashboard tracks a curated list of consistently successful Polymarket traders and
+          aggregates their portfolios into one combined view. The idea: when many independently
+          profitable traders converge on the same market outcome, that consensus is signal.
+          Two sister dashboards share this exact codebase:
+          <strong>core.shtanga.xyz</strong> — a small, strictly curated tier-1 list — and
+          <strong>watch.shtanga.xyz</strong> — a broader watchlist (tier&nbsp;1 + tier&nbsp;2 candidates under evaluation).
+        </p>
+
+        <h3>Sections</h3>
+        <ul>
+          <li><strong>Traders</strong> — the tracked wallets: label, portfolio value, all-time PnL,
+            USDC balance and open-position count. Click a trader to open their Polymarket profile.
+            Use the search box to filter.</li>
+          <li><strong>Portfolio</strong> — the heart of the dashboard. Every market outcome held by
+            tracked traders, aggregated: how many traders hold it, combined exposure ($ and shares),
+            average entry price, % allocation, and momentum columns (1h / 1d / 1w change). Sort by
+            any column; hover the change columns for a per-trader breakdown tooltip.</li>
+          <li><strong>Recent Changes</strong> — the live feed of position changes: entries, exits,
+            adds and trims, newest first. The <em>eye</em> icon in the Portfolio's last column filters
+            this feed to one market — that's the fastest way to answer "who just moved here?".</li>
+          <li><strong>Checker</strong> — paste <em>any</em> wallet address to inspect its current
+            positions, exposure and all-time PnL. Works for wallets outside the tracked list too —
+            use it to vet a trader before suggesting them for the watchlist.</li>
+        </ul>
+
+        <h3>What to pay attention to</h3>
+        <ul>
+          <li><strong>Trader count beats raw exposure.</strong> $500k from one whale is one opinion;
+            $50k from nine independent traders is consensus. Sort the Portfolio by Traders to surface it.</li>
+          <li><strong>Momentum columns</strong> (1h/1d/1w) show where money is moving <em>now</em> —
+            a rising trader count on a previously quiet market is the classic early signal.</li>
+          <li><strong>Balanced pairs filter</strong> — some traders hold both YES and NO of the same
+            market (market-making / hedging, not directional opinion). The filter hides those so you
+            see real conviction only.</li>
+          <li><strong>Expiration</strong> — a heavy position expiring in days is a sharper signal than
+            the same position six months out.</li>
+          <li><strong>Freshness</strong> — the timestamp next to the tabs shows the last data refresh.
+            Data updates every ~2 minutes; the page picks it up automatically (auto-reload pauses after
+            you've been inactive, the ↻ button forces a refresh).</li>
+        </ul>
+
+        <h3>Architecture (for the curious)</h3>
+        <ul>
+          <li><strong>Pipeline</strong> — a GitHub Actions job runs every couple of minutes:
+            it pulls each tracked wallet's positions, balances and activity from the Polymarket APIs
+            (through rotating proxies, with retries), scrapes all-time PnL (cached ~1h),
+            aggregates everything, and diffs against the previous run to produce the Recent Changes feed.</li>
+          <li><strong>Storage</strong> — results are published to Cloudflare R2 as immutable snapshots
+            plus a tiny <code>metadata.json</code> pointer that flips only after a snapshot is fully
+            uploaded — so the page can never read a half-written update.</li>
+          <li><strong>Frontend</strong> — this static page polls only the pointer (~1&nbsp;KB) and
+            re-downloads the data files just when the snapshot actually changed.</li>
+          <li><strong>Notifications</strong> — a Telegram bot watches the same data feed and posts
+            significant position changes (entries, exits, milestones) with its own snapshot state,
+            so it degrades gracefully if a refresh is delayed.</li>
+          <li><strong>One codebase</strong> — core and watch differ only in a config file and a
+            traders CSV; every feature and fix ships to both sites simultaneously.</li>
+        </ul>
+
+        <h3>Caveats</h3>
+        <ul>
+          <li>Data is delayed by up to a few minutes — this is a research tool, not an execution feed.</li>
+          <li>Tracked traders can be wrong, early, or hedged elsewhere. Consensus reduces but never removes risk.</li>
+          <li>PnL figures come from Polymarket's own profile stats; freshly scraped values can lag by up to an hour.</li>
+        </ul>
+
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Data auto-updates every couple of minutes</p>
+    <p><a id="github-link" href="#" target="_blank">View on GitHub</a></p>
+  </footer>
+
+  <script src="assets/site-config.js"></script>
+  <script src="assets/app.js?v=unified-20260612"></script>
+</body>
+</html>
