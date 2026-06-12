@@ -306,26 +306,60 @@ function buildHeldOutcomesIndex(traderPortfolios, prevTraderPortfolios) {
  * trader holds (or held last run) for that condition; skip when unknown
  * rather than guess and poison the other side's flow.
  *
- * @returns {Array<{outcomeIndex: number, delta: number}>}
+ * @returns {Array<{outcomeIndex: number, delta: number, shares: number}>}
+ *   delta is in USD, shares in outcome tokens (signed the same way).
  */
 function eventOutcomeDeltas(a, heldOutcomes) {
   if (a.type && !POSITION_EVENT_TYPES.has(a.type)) return [];
   if (!a.conditionId) return [];
   const usd = parseFloat(a.usdcSize || a.size || 0);
+  const size = parseFloat(a.size || 0);
   if (!usd) return [];
 
   if (!a.type || a.type === 'TRADE') {
     const idx = (a.outcomeIndex !== undefined && a.outcomeIndex !== 999)
       ? a.outcomeIndex
       : (a.outcome === 'Yes' ? 1 : 0);
-    return [{ outcomeIndex: idx, delta: a.side === 'BUY' ? usd : -usd }];
+    const sign = a.side === 'BUY' ? 1 : -1;
+    return [{ outcomeIndex: idx, delta: sign * usd, shares: sign * size }];
   }
 
   // SPLIT mints both sides (+); REDEEM/MERGE/CONVERSION close positions (−).
   const sign = a.type === 'SPLIT' ? 1 : -1;
   const held = heldOutcomes?.get(`${(a.traderAddress || a.proxyWallet || '').toLowerCase()}-${a.conditionId}`);
   if (!held || held.size === 0) return [];
-  return Array.from(held).map(outcomeIndex => ({ outcomeIndex, delta: sign * usd }));
+  return Array.from(held).map(outcomeIndex => ({ outcomeIndex, delta: sign * usd, shares: sign * size }));
+}
+
+/**
+ * Per-position net share flow per trader over the last 24h.
+ * Used to count traders entering/exiting a position: a current holder whose
+ * net 24h share inflow ≈ their whole position entered within the window; a
+ * non-holder with net outflow exited within it.
+ *
+ * @returns {Map<string, Map<string, number>>} key `${conditionId}-${outcomeIndex}`
+ *   → Map of lowercase trader address → net shares (±) in the last 24h
+ */
+function buildTraderFlow24h(activity, heldOutcomes) {
+  const now = Math.floor(Date.now() / 1000);
+  const cutoff = now - 24 * 3600;
+  const map = new Map();
+
+  for (const a of activity) {
+    if ((a.timestamp || 0) < cutoff) continue;
+    const addr = (a.traderAddress || a.proxyWallet || '').toLowerCase();
+    if (!addr) continue;
+
+    for (const { outcomeIndex, shares } of eventOutcomeDeltas(a, heldOutcomes)) {
+      if (!shares) continue;
+      const key = `${a.conditionId}-${outcomeIndex}`;
+      let perTrader = map.get(key);
+      if (!perTrader) { perTrader = new Map(); map.set(key, perTrader); }
+      perTrader.set(addr, (perTrader.get(addr) || 0) + shares);
+    }
+  }
+
+  return map;
 }
 
 function build24hChangeMap(activity, heldOutcomes) {
@@ -453,6 +487,9 @@ export function aggregatePortfolios(traderPortfolios, config, activity = [], dat
   // Chained per-window aggregates (Δ1h / Δ1h→1d / Δ1d→1w) from full activity
   const windowChangesMap = buildWindowChangesMap(activity, heldOutcomes);
 
+  // Net 24h share flow per trader per position (entered/exited counters)
+  const traderFlow24hMap = buildTraderFlow24h(activity, heldOutcomes);
+
   // Map: conditionId-outcome -> aggregated data
   const aggregated = new Map();
 
@@ -545,6 +582,25 @@ export function aggregatePortfolios(traderPortfolios, config, activity = [], dat
     const prevTraderCount = prevTraderCounts.get(key) || 0;
     const traderCountChange = prevTraderCount > 0 ? currentTraderCount - prevTraderCount : 0;
 
+    // Traders entered/exited in the last 24h, from net share flow:
+    // - holder whose pre-window size was ~zero → entered
+    // - non-holder who flowed shares out → exited
+    let entered24h = 0;
+    let exited24h = 0;
+    const flow = traderFlow24hMap.get(key);
+    if (flow) {
+      const holderSizes = new Map(agg.traders.map(t => [t.address.toLowerCase(), t.size || 0]));
+      for (const [addr, netShares] of flow) {
+        const sizeNow = holderSizes.get(addr);
+        if (sizeNow !== undefined) {
+          const sizeBefore = sizeNow - netShares;
+          if (sizeBefore <= Math.max(1, sizeNow * 0.05)) entered24h++;
+        } else if (netShares < -1) {
+          exited24h++;
+        }
+      }
+    }
+
     return {
       conditionId: agg.conditionId,
       title: agg.title,
@@ -556,6 +612,9 @@ export function aggregatePortfolios(traderPortfolios, config, activity = [], dat
       outcomeIndex: agg.outcomeIndex,
       traderCount: currentTraderCount,
       traderCountChange: traderCountChange,
+      ...(entered24h || exited24h
+        ? { traderFlow24h: { entered: entered24h, exited: exited24h } }
+        : {}),
       traders: agg.traders,
       totalExposure: agg.totalExposure,
       totalSize: Math.round(agg.totalSize * 10000) / 10000,
