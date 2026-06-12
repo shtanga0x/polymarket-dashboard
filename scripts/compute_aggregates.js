@@ -232,7 +232,6 @@ export async function fetchRecentActivity(traders, config) {
 
   const allActivity = [];
   const concurrency = config.concurrency_limit || 8;
-  const maxEvents = config.max_recent_events || 2000;
 
   // Calculate timestamp for 30 days ago
   const thirtyDaysAgo = Math.floor(Date.now() / 1000) - (30 * 24 * 60 * 60);
@@ -261,9 +260,12 @@ export async function fetchRecentActivity(traders, config) {
     }
   }
 
-  // Sort by timestamp descending and limit
+  // Sort by timestamp descending. The full set feeds the window aggregates
+  // (Δ1h / Δ1h→1d / Δ1d→1w) — capping happens only in the recent_changes
+  // OUTPUT (processRecentChanges), so a small feed file doesn't silently
+  // truncate the day/week windows to a couple of hours.
   allActivity.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-  return allActivity.slice(0, maxEvents);
+  return allActivity;
 }
 
 /**
@@ -290,6 +292,81 @@ function build24hChangeMap(activity) {
   }
 
   return changeMap;
+}
+
+/**
+ * Build per-position chained window aggregates from the FULL activity set.
+ *
+ * Windows are non-overlapping so each trade counts in exactly one bucket:
+ *   h1 = (now-1h, now], d1 = (now-1d, now-1h], w1 = (now-1w, now-1d]
+ * This lets the UI show the evolution window by window instead of three
+ * overlapping "vs now" sums.
+ *
+ * @returns {Map<string, object>} key `${conditionId}-${outcomeIndex}` →
+ *   { h1, d1, w1, t1h: Map<trader,delta>, t1d: Map, t1w: Map }
+ */
+function buildWindowChangesMap(activity) {
+  const now = Math.floor(Date.now() / 1000);
+  const cutoff1h = now - 3600;
+  const cutoff1d = now - 24 * 3600;
+  const cutoff1w = now - 7 * 24 * 3600;
+  const map = new Map();
+
+  for (const a of activity) {
+    const ts = a.timestamp || 0;
+    if (ts < cutoff1w) continue;
+    if (a.type && a.type !== 'TRADE') continue;
+
+    // Create key matching position aggregation
+    const outcomeIdx = a.outcomeIndex !== undefined ? a.outcomeIndex : (a.outcome === 'Yes' ? 1 : 0);
+    const key = `${a.conditionId}-${outcomeIdx}`;
+
+    const delta = a.side === 'BUY'
+      ? parseFloat(a.usdcSize || a.size || 0)
+      : -parseFloat(a.usdcSize || a.size || 0);
+    const trader = a.traderLabel || a.traderAddress?.slice(0, 10);
+
+    let entry = map.get(key);
+    if (!entry) {
+      entry = { h1: 0, d1: 0, w1: 0, t1h: new Map(), t1d: new Map(), t1w: new Map() };
+      map.set(key, entry);
+    }
+
+    if (ts >= cutoff1h) {
+      entry.h1 += delta;
+      entry.t1h.set(trader, (entry.t1h.get(trader) || 0) + delta);
+    } else if (ts >= cutoff1d) {
+      entry.d1 += delta;
+      entry.t1d.set(trader, (entry.t1d.get(trader) || 0) + delta);
+    } else {
+      entry.w1 += delta;
+      entry.t1w.set(trader, (entry.t1w.get(trader) || 0) + delta);
+    }
+  }
+
+  return map;
+}
+
+/**
+ * Serialize one window-changes entry for JSON output: rounded sums plus
+ * per-trader breakdowns sorted by |delta| (capped to keep the file small).
+ */
+function serializeWindowChanges(entry) {
+  const MAX_DETAILS = 8;
+  const round2 = v => Math.round(v * 100) / 100;
+  const details = m => Array.from(m.entries())
+    .map(([trader, change]) => ({ trader, change: round2(change) }))
+    .sort((a, b) => Math.abs(b.change) - Math.abs(a.change))
+    .slice(0, MAX_DETAILS);
+
+  return {
+    h1: round2(entry.h1),
+    d1: round2(entry.d1),
+    w1: round2(entry.w1),
+    h1Details: details(entry.t1h),
+    d1Details: details(entry.t1d),
+    w1Details: details(entry.t1w)
+  };
 }
 
 /**
@@ -326,6 +403,9 @@ export function aggregatePortfolios(traderPortfolios, config, activity = [], dat
 
   // Build 24h change map from activity
   const change24hMap = build24hChangeMap(activity);
+
+  // Chained per-window aggregates (Δ1h / Δ1h→1d / Δ1d→1w) from full activity
+  const windowChangesMap = buildWindowChangesMap(activity);
 
   // Map: conditionId-outcome -> aggregated data
   const aggregated = new Map();
@@ -436,7 +516,11 @@ export function aggregatePortfolios(traderPortfolios, config, activity = [], dat
       change24h: Math.round((change24hMap.get(key) || 0) * 100) / 100,
       avgEntry: Math.round(avgEntry * 100) / 100,
       curPrice: Math.round(curPrice * 100) / 100,
-      priceChangePct: Math.round(priceChangePct * 10) / 10
+      priceChangePct: Math.round(priceChangePct * 10) / 10,
+      // Sparse: only positions with activity in the last week carry this.
+      ...(windowChangesMap.has(key)
+        ? { windowChanges: serializeWindowChanges(windowChangesMap.get(key)) }
+        : {})
     };
   });
 
@@ -485,7 +569,7 @@ export function aggregatePortfolios(traderPortfolios, config, activity = [], dat
 /**
  * Process activity into recent changes format
  */
-export function processRecentChanges(activity, traderPortfolios) {
+export function processRecentChanges(activity, traderPortfolios, maxEvents = 2000) {
   const now = Math.floor(Date.now() / 1000);
   const windows = {
     '1h': now - 3600,
@@ -545,7 +629,9 @@ export function processRecentChanges(activity, traderPortfolios) {
     windowSummaries[key] = Math.round(windowSummaries[key] * 100) / 100;
   }
 
-  return { changes, windowSummaries };
+  // Cap the OUTPUT feed only — windowSummaries above already saw the full
+  // activity set (activity arrives sorted by timestamp descending).
+  return { changes: changes.slice(0, maxEvents), windowSummaries };
 }
 
 /**
@@ -571,7 +657,7 @@ export async function computeAll({ config, dataDir, rootDir }) {
 
   // Aggregate - pass activity for 24h change calculation
   const aggregatedPortfolio = aggregatePortfolios(traderPortfolios, config, activity, dataDir);
-  const recentChanges = processRecentChanges(activity, traderPortfolios);
+  const recentChanges = processRecentChanges(activity, traderPortfolios, config.max_recent_events || 2000);
 
   // Update 24h flow in summary
   aggregatedPortfolio.summary.netFlow24h = recentChanges.windowSummaries['24h'];
