@@ -771,7 +771,7 @@ function portfolioTheadHTML() {
       <th class="sortable" onclick="handlePortfolioSort('totalExposure')">Exposure, $ / shares${getSortIndicator('totalExposure')}</th>
       <th>% Alloc</th>
       <th class="sortable tooltip-header" onclick="handlePortfolioSort('change1h')">1h Change${getSortIndicator('change1h')}<span class="header-info">last hour</span></th>
-      <th class="sortable tooltip-header" onclick="handlePortfolioSort('change1d')">1d Change${getSortIndicator('change1d')}<span class="header-info">1h&ndash;24h ago</span></th>
+      <th class="sortable tooltip-header" onclick="handlePortfolioSort('change1d')">24h Change${getSortIndicator('change1d')}<span class="header-info">1h&ndash;24h ago</span></th>
       <th class="sortable tooltip-header" onclick="handlePortfolioSort('change1w')">1w Change${getSortIndicator('change1w')}<span class="header-info">1&ndash;7 days ago</span></th>
       <th class="recent-changes-col"><span class="recent-changes-th" title="Recent changes">${EYE_ICON}</span></th>
     </tr>
