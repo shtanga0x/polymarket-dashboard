@@ -116,7 +116,7 @@
               <th class="sortable">Exposure, $ / shares</th>
               <th>% Alloc</th>
               <th class="sortable tooltip-header">1h Change<span class="header-info">last hour</span></th>
-              <th class="sortable tooltip-header">1d Change<span class="header-info">1h&ndash;24h ago</span></th>
+              <th class="sortable tooltip-header">24h Change<span class="header-info">1h&ndash;24h ago</span></th>
               <th class="sortable tooltip-header">1w Change<span class="header-info">1&ndash;7 days ago</span></th>
               <th class="recent-changes-col">Recent changes</th>
             </tr>
@@ -242,7 +242,7 @@
                 <th>Model %</th>
                 <th id="traders-column-label">Traders</th>
                 <th class="tooltip-header">1h Change<span class="header-info">last hour</span></th>
-                <th class="tooltip-header">1d Change<span class="header-info">1h&ndash;24h ago</span></th>
+                <th class="tooltip-header">24h Change<span class="header-info">1h&ndash;24h ago</span></th>
                 <th class="tooltip-header">1w Change<span class="header-info">1&ndash;7 days ago</span></th>
               </tr>
             </thead>
@@ -279,7 +279,7 @@
           <li><strong>Portfolio</strong> — the heart of the dashboard. Every market outcome held by
             tracked traders, aggregated: how many traders hold it, combined exposure ($ and shares),
             average entry price, % allocation, and chained momentum columns
-            (1h / 1d / 1w Change). Sort by
+            (1h / 24h / 1w Change). Sort by
             any column; hover the change columns for a per-trader breakdown tooltip.</li>
           <li><strong>Recent Changes</strong> — the live feed of position changes: entries, exits,
             adds and trims, newest first. The <em>eye</em> icon in the Portfolio's last column filters
@@ -297,7 +297,7 @@
             means 6 holders now, 2 entered and 1 exited within 24h. Fresh entries are the
             strongest version of the consensus signal.</li>
           <li><strong>Momentum columns are chained, non-overlapping windows</strong>:
-            1h Change covers the last hour, 1d Change the day before it (1h&ndash;24h ago),
+            1h Change covers the last hour, 24h Change the day before it (1h&ndash;24h ago),
             1w Change the week before that (1&ndash;7 days ago) — each trade is counted in exactly one
             column, so you can read the evolution window by window (e.g. accumulated last week,
             quiet yesterday, buying again this hour). Fresh money in the 1h column on a

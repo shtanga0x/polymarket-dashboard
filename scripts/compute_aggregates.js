@@ -306,10 +306,19 @@ function buildHeldOutcomesIndex(traderPortfolios, prevTraderPortfolios) {
  * trader holds (or held last run) for that condition; skip when unknown
  * rather than guess and poison the other side's flow.
  *
+ * Dollar scale: TRADE deltas are usdcSize = shares × traded price. Non-trade
+ * events instead report a $1-per-pair cash size (usdcSize ≈ shares), a
+ * different scale than trades — booking it raw over-weights a cheap outcome
+ * by 1/price (e.g. ~6× at $0.16, which used to drag the change columns
+ * negative while share counts kept climbing). So value non-trade events at
+ * the outcome's current MARKET price (shares × priceMap[key]) to match the
+ * trade scale, falling back to the cash size only when no price is known —
+ * i.e. a fully closed/resolved position, where $1-per-share ≈ its value.
+ *
  * @returns {Array<{outcomeIndex: number, delta: number, shares: number}>}
  *   delta is in USD, shares in outcome tokens (signed the same way).
  */
-function eventOutcomeDeltas(a, heldOutcomes) {
+function eventOutcomeDeltas(a, heldOutcomes, priceMap = null) {
   if (a.type && !POSITION_EVENT_TYPES.has(a.type)) return [];
   if (!a.conditionId) return [];
   const usd = parseFloat(a.usdcSize || a.size || 0);
@@ -328,7 +337,37 @@ function eventOutcomeDeltas(a, heldOutcomes) {
   const sign = a.type === 'SPLIT' ? 1 : -1;
   const held = heldOutcomes?.get(`${(a.traderAddress || a.proxyWallet || '').toLowerCase()}-${a.conditionId}`);
   if (!held || held.size === 0) return [];
-  return Array.from(held).map(outcomeIndex => ({ outcomeIndex, delta: sign * usd, shares: sign * size }));
+  return Array.from(held).map(outcomeIndex => {
+    const price = priceMap?.get(`${a.conditionId}-${outcomeIndex}`);
+    // Market value when the price is known (live, still-held outcome); else
+    // the $1-per-pair cash size (closed/resolved — no current price to use).
+    const usdValue = (Number.isFinite(price) && price > 0) ? size * price : usd;
+    return { outcomeIndex, delta: sign * usdValue, shares: sign * size };
+  });
+}
+
+/**
+ * Current market price per `${conditionId}-${outcomeIndex}`, taken from the
+ * given portfolio sources (later sources win, so pass previous then current).
+ * Used to value non-trade events in eventOutcomeDeltas at market scale.
+ */
+function buildOutcomePriceMap(...portfolioSources) {
+  const map = new Map();
+  for (const source of portfolioSources) {
+    if (!source) continue;
+    for (const p of Object.values(source)) {
+      for (const pos of p?.positions || []) {
+        if (pos.conditionId === undefined) continue;
+        const idx = pos.outcomeIndex !== undefined
+          ? pos.outcomeIndex
+          : (pos.outcome === 'Yes' ? 1 : 0);
+        const price = parseFloat(pos.curPrice);
+        if (!Number.isFinite(price) || price <= 0) continue;
+        map.set(`${pos.conditionId}-${idx}`, price);
+      }
+    }
+  }
+  return map;
 }
 
 /**
@@ -340,7 +379,7 @@ function eventOutcomeDeltas(a, heldOutcomes) {
  * @returns {Map<string, Map<string, number>>} key `${conditionId}-${outcomeIndex}`
  *   → Map of lowercase trader address → net shares (±) in the last 24h
  */
-function buildTraderFlow24h(activity, heldOutcomes) {
+function buildTraderFlow24h(activity, heldOutcomes, priceMap = null) {
   const now = Math.floor(Date.now() / 1000);
   const cutoff = now - 24 * 3600;
   const map = new Map();
@@ -350,7 +389,7 @@ function buildTraderFlow24h(activity, heldOutcomes) {
     const addr = (a.traderAddress || a.proxyWallet || '').toLowerCase();
     if (!addr) continue;
 
-    for (const { outcomeIndex, shares } of eventOutcomeDeltas(a, heldOutcomes)) {
+    for (const { outcomeIndex, shares } of eventOutcomeDeltas(a, heldOutcomes, priceMap)) {
       if (!shares) continue;
       const key = `${a.conditionId}-${outcomeIndex}`;
       let perTrader = map.get(key);
@@ -362,14 +401,14 @@ function buildTraderFlow24h(activity, heldOutcomes) {
   return map;
 }
 
-function build24hChangeMap(activity, heldOutcomes) {
+function build24hChangeMap(activity, heldOutcomes, priceMap = null) {
   const now = Math.floor(Date.now() / 1000);
   const cutoff24h = now - 24 * 3600;
   const changeMap = new Map();
 
   for (const a of activity) {
     if ((a.timestamp || 0) < cutoff24h) continue;
-    for (const { outcomeIndex, delta } of eventOutcomeDeltas(a, heldOutcomes)) {
+    for (const { outcomeIndex, delta } of eventOutcomeDeltas(a, heldOutcomes, priceMap)) {
       const key = `${a.conditionId}-${outcomeIndex}`;
       changeMap.set(key, (changeMap.get(key) || 0) + delta);
     }
@@ -389,7 +428,7 @@ function build24hChangeMap(activity, heldOutcomes) {
  * @returns {Map<string, object>} key `${conditionId}-${outcomeIndex}` →
  *   { h1, d1, w1, t1h: Map<trader,delta>, t1d: Map, t1w: Map }
  */
-function buildWindowChangesMap(activity, heldOutcomes) {
+function buildWindowChangesMap(activity, heldOutcomes, priceMap = null) {
   const now = Math.floor(Date.now() / 1000);
   const cutoff1h = now - 3600;
   const cutoff1d = now - 24 * 3600;
@@ -402,7 +441,7 @@ function buildWindowChangesMap(activity, heldOutcomes) {
 
     const trader = a.traderLabel || a.traderAddress?.slice(0, 10);
 
-    for (const { outcomeIndex, delta } of eventOutcomeDeltas(a, heldOutcomes)) {
+    for (const { outcomeIndex, delta } of eventOutcomeDeltas(a, heldOutcomes, priceMap)) {
       const key = `${a.conditionId}-${outcomeIndex}`;
 
       let entry = map.get(key);
@@ -477,18 +516,22 @@ function loadPreviousPortfolio(dataDir) {
 /**
  * Aggregate positions across all traders
  */
-export function aggregatePortfolios(traderPortfolios, config, activity = [], dataDir = null, heldOutcomes = null) {
+export function aggregatePortfolios(traderPortfolios, config, activity = [], dataDir = null, heldOutcomes = null, priceMap = null) {
   // Load previous trader counts for comparison
   const prevTraderCounts = dataDir ? loadPreviousPortfolio(dataDir) : new Map();
 
+  // Outcome prices to value non-trade events at market scale. Build from the
+  // current portfolios when not supplied (standalone callers).
+  const prices = priceMap || buildOutcomePriceMap(traderPortfolios);
+
   // Build 24h change map from activity
-  const change24hMap = build24hChangeMap(activity, heldOutcomes);
+  const change24hMap = build24hChangeMap(activity, heldOutcomes, prices);
 
   // Chained per-window aggregates (Δ1h / Δ1h→1d / Δ1d→1w) from full activity
-  const windowChangesMap = buildWindowChangesMap(activity, heldOutcomes);
+  const windowChangesMap = buildWindowChangesMap(activity, heldOutcomes, prices);
 
   // Net 24h share flow per trader per position (entered/exited counters)
-  const traderFlow24hMap = buildTraderFlow24h(activity, heldOutcomes);
+  const traderFlow24hMap = buildTraderFlow24h(activity, heldOutcomes, prices);
 
   // Map: conditionId-outcome -> aggregated data
   const aggregated = new Map();
@@ -682,8 +725,9 @@ const NON_TRADE_ACTIONS = {
   CONVERT: 'converted'
 };
 
-export function processRecentChanges(activity, traderPortfolios, maxEvents = 2000, heldOutcomes = null) {
+export function processRecentChanges(activity, traderPortfolios, maxEvents = 2000, heldOutcomes = null, priceMap = null) {
   const now = Math.floor(Date.now() / 1000);
+  const prices = priceMap || buildOutcomePriceMap(traderPortfolios);
   const windows = {
     '1h': now - 3600,
     '6h': now - 6 * 3600,
@@ -699,7 +743,7 @@ export function processRecentChanges(activity, traderPortfolios, maxEvents = 200
       const ts = a.timestamp || 0;
       const isTrade = !a.type || a.type === 'TRADE';
 
-      return eventOutcomeDeltas(a, heldOutcomes).map(({ outcomeIndex, delta }) => {
+      return eventOutcomeDeltas(a, heldOutcomes, prices).map(({ outcomeIndex, delta }) => {
         // Update window summaries
         for (const [window, threshold] of Object.entries(windows)) {
           if (ts >= threshold) {
@@ -774,14 +818,16 @@ export async function computeAll({ config, dataDir, rootDir }) {
 
   // Attribution index for REDEEM/MERGE/CONVERSION events (outcomeIndex 999):
   // current + previous run portfolios tell us which side each trader held.
-  const heldOutcomes = buildHeldOutcomesIndex(
-    traderPortfolios,
-    loadPreviousTraderPortfolios(dataDir)
-  );
+  const prevTraderPortfolios = loadPreviousTraderPortfolios(dataDir);
+  const heldOutcomes = buildHeldOutcomesIndex(traderPortfolios, prevTraderPortfolios);
+
+  // Outcome prices (previous then current → current wins) to value non-trade
+  // events at market scale in the change flows.
+  const priceMap = buildOutcomePriceMap(prevTraderPortfolios, traderPortfolios);
 
   // Aggregate - pass activity for 24h change calculation
-  const aggregatedPortfolio = aggregatePortfolios(traderPortfolios, config, activity, dataDir, heldOutcomes);
-  const recentChanges = processRecentChanges(activity, traderPortfolios, config.max_recent_events || 2000, heldOutcomes);
+  const aggregatedPortfolio = aggregatePortfolios(traderPortfolios, config, activity, dataDir, heldOutcomes, priceMap);
+  const recentChanges = processRecentChanges(activity, traderPortfolios, config.max_recent_events || 2000, heldOutcomes, priceMap);
 
   // Update 24h flow in summary
   aggregatedPortfolio.summary.netFlow24h = recentChanges.windowSummaries['24h'];
