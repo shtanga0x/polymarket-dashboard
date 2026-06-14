@@ -556,6 +556,9 @@ export function aggregatePortfolios(traderPortfolios, config, activity = [], dat
       if (!aggregated.has(key)) {
         aggregated.set(key, {
           conditionId: pos.conditionId,
+          // CLOB token id for this outcome — constant per conditionId+outcome.
+          // Carried through so the frontend can poll live midpoint prices.
+          asset: pos.asset || '',
           title: pos.title || 'Unknown Market',
           slug: pos.slug || '',
           icon: pos.icon || '',
@@ -646,6 +649,7 @@ export function aggregatePortfolios(traderPortfolios, config, activity = [], dat
 
     return {
       conditionId: agg.conditionId,
+      asset: agg.asset,
       title: agg.title,
       slug: agg.slug,
       icon: agg.icon,
@@ -738,6 +742,21 @@ export function processRecentChanges(activity, traderPortfolios, maxEvents = 200
 
   const windowSummaries = { '1h': 0, '6h': 0, '24h': 0, '7d': 0, '30d': 0 };
 
+  // Polymarket's Yes/No ↔ outcomeIndex pairing is per-market (Yes is index 0
+  // in some markets, 1 in others), so learn each market's mapping from its
+  // TRADE events — they carry both the name and the index — instead of
+  // assuming a fixed order. Used to label REDEEM / MERGE / SPLIT events, which
+  // report an empty outcome and index 999.
+  const outcomeNameByCond = new Map();
+  for (const a of activity) {
+    if (a.type && a.type !== 'TRADE') continue;
+    const idx = a.outcomeIndex;
+    if (!a.outcome || idx === undefined || idx === 999) continue;
+    let m = outcomeNameByCond.get(a.conditionId);
+    if (!m) { m = new Map(); outcomeNameByCond.set(a.conditionId, m); }
+    if (!m.has(idx)) m.set(idx, a.outcome);
+  }
+
   const changes = activity
     .flatMap(a => {
       const ts = a.timestamp || 0;
@@ -761,10 +780,12 @@ export function processRecentChanges(activity, traderPortfolios, maxEvents = 200
         }
 
         // Determine outcome name. Non-trade events report outcome '' /
-        // index 999 — leave the name to the event when it has one.
+        // index 999 — recover the side from the market's learned index→name
+        // map (Yes/No order varies per market), using the index that
+        // eventOutcomeDeltas attributed this leg to.
         let outcome = a.outcome || '';
-        if (!outcome && isTrade && a.outcomeIndex !== undefined) {
-          outcome = a.outcomeIndex === 0 ? 'No' : 'Yes';
+        if (!outcome) {
+          outcome = outcomeNameByCond.get(a.conditionId)?.get(outcomeIndex) || '';
         }
 
         return {

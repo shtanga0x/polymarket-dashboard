@@ -31,6 +31,14 @@ const INACTIVITY_TIMEOUT = SITE.inactivityTimeoutMinutes * 60_000;
 const AUTO_RELOAD_INTERVAL = SITE.autoReloadSeconds * 1000;
 const BALANCED_SHARE_DIFF_THRESHOLD = 0.10;
 
+// Live market-price overlay. Between full data snapshots the browser polls
+// Polymarket's CLOB midpoint endpoint directly for the on-screen markets and
+// recomputes curPrice / entry-change% / exposure, so prices aren't stale by up
+// to a snapshot interval. One batched POST per tick keeps it light on the API.
+const CLOB_BASE = 'https://clob.polymarket.com';
+const LIVE_PRICE_INTERVAL = 15_000;
+const LIVE_PRICE_BATCH = 100;
+
 // Cloudflare Worker that dispatches a manual data refresh via GitHub Actions.
 const WORKER_URL = 'https://pmw-trigger.bobrovnikovstepan.workers.dev';
 
@@ -46,6 +54,7 @@ let lastActivityTime = Date.now();
 let autoReloadTimer = null;
 let lastUpdatedTicker = null;
 let updatePollTimer = null;
+let livePriceTimer = null;
 
 // Concurrency guard: loadData() no-ops while a load is already in flight.
 let isLoading = false;
@@ -302,6 +311,110 @@ function startAutoReload() {
   if (!lastUpdatedTicker) {
     lastUpdatedTicker = setInterval(updateLastUpdated, 30_000);
   }
+}
+
+// ============================================================
+// LIVE PRICE OVERLAY
+// ============================================================
+
+/**
+ * Unique CLOB token ids for the positions currently in the aggregated
+ * portfolio. Positions from older snapshots that predate the `asset` field are
+ * skipped (no token id to query) — the overlay simply no-ops until fresh data.
+ */
+function collectPositionTokens() {
+  const tokens = new Set();
+  for (const p of aggregatedPortfolio?.positions || []) {
+    if (p.asset) tokens.add(p.asset);
+  }
+  return [...tokens];
+}
+
+/**
+ * Batch-fetch current midpoint prices for the given CLOB token ids.
+ * Returns a Map token_id → mid (number > 0). Any network/parse failure yields
+ * an empty (or partial) map, so the overlay keeps the last-known prices.
+ */
+async function fetchLiveMidpoints(tokenIds) {
+  const out = new Map();
+  for (let i = 0; i < tokenIds.length; i += LIVE_PRICE_BATCH) {
+    const chunk = tokenIds.slice(i, i + LIVE_PRICE_BATCH);
+    try {
+      const res = await fetch(`${CLOB_BASE}/midpoints`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(chunk.map(token_id => ({ token_id })))
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      for (const [token, mid] of Object.entries(data || {})) {
+        const v = parseFloat(mid);
+        if (Number.isFinite(v) && v > 0) out.set(token, v);
+      }
+    } catch (_) { /* keep prior prices on failure */ }
+  }
+  return out;
+}
+
+/**
+ * Apply fresh midpoints onto the in-memory aggregated portfolio: update each
+ * position's curPrice, its entry change %, and its market exposure
+ * (shares × live price, matching the server's size×curPrice exposure).
+ * Returns true if any position moved.
+ */
+function applyLiveMidpoints(midByToken) {
+  if (!midByToken.size || !aggregatedPortfolio?.positions) return false;
+  let changed = false;
+  for (const p of aggregatedPortfolio.positions) {
+    const mid = p.asset ? midByToken.get(p.asset) : undefined;
+    if (mid === undefined || mid === p.curPrice) continue;
+    p.curPrice = mid;
+    p.priceChangePct = p.avgEntry > 0
+      ? Math.round(((mid - p.avgEntry) / p.avgEntry) * 1000) / 10
+      : p.priceChangePct;
+    p.totalExposure = getPositionShares(p) * mid;
+    changed = true;
+  }
+  if (changed) rescalePortfolioSummary();
+  return changed;
+}
+
+/**
+ * Keep the summary cards consistent with live exposures. totalExposure is the
+ * exact sum; relativeExposure tracks it proportionally (invested capital
+ * doesn't change on a price tick). Concentration ratios barely move tick-to-
+ * tick and use the server's market-grouped method, so they're left as-is.
+ */
+function rescalePortfolioSummary() {
+  const s = aggregatedPortfolio?.summary;
+  const positions = aggregatedPortfolio?.positions;
+  if (!s || !positions) return;
+  const prevTotal = s.totalExposure || 0;
+  const newTotal = positions.reduce((sum, p) => sum + (p.totalExposure || 0), 0);
+  if (prevTotal > 0) s.relativeExposure = s.relativeExposure * (newTotal / prevTotal);
+  s.totalExposure = newTotal;
+}
+
+/**
+ * One overlay tick: pull live midpoints for the on-screen markets and, if any
+ * moved, re-render the portfolio table + summary. Paused while the user is
+ * inactive or the tab is hidden so idle tabs make no requests.
+ */
+async function refreshLivePrices() {
+  if (Date.now() - lastActivityTime > INACTIVITY_TIMEOUT) return;
+  if (document.hidden) return;
+  const tokens = collectPositionTokens();
+  if (!tokens.length) return;
+  const mids = await fetchLiveMidpoints(tokens);
+  if (applyLiveMidpoints(mids)) {
+    renderPortfolioSummary();
+    renderPortfolioTable();
+  }
+}
+
+function startLivePrices() {
+  if (livePriceTimer) clearInterval(livePriceTimer);
+  livePriceTimer = setInterval(refreshLivePrices, LIVE_PRICE_INTERVAL);
 }
 
 // ============================================================
@@ -866,49 +979,6 @@ function renderPortfolioTable() {
   updateBalancedFilterButton();
 }
 
-/**
- * Render changes summary
- */
-function renderChangesSummary() {
-  if (!recentChanges?.windowSummaries) return;
-
-  const ws = recentChanges.windowSummaries;
-  const windows = ['1h', '6h', '24h', '7d', '30d'];
-
-  windows.forEach(w => {
-    const el = document.getElementById(`flow-${w}`);
-    if (el) {
-      const value = ws[w] || 0;
-      el.textContent = formatUSD(value);
-      el.className = 'card-value ' + (value >= 0 ? 'positive' : 'negative');
-    }
-  });
-}
-
-/**
- * Get trader's average entry price for a specific position.
- * `outcomeName` is a fallback match for sports/non-binary markets where the
- * outcome isn't a simple Yes/No pair.
- */
-function getTraderAvgEntry(traderAddress, conditionId, outcomeIndex, outcomeName) {
-  if (!traderPortfolios) return null;
-
-  const trader = traderPortfolios[traderAddress?.toLowerCase()];
-  if (!trader?.positions) return null;
-
-  const position = trader.positions.find(p => {
-    if (p.conditionId !== conditionId) return false;
-    if (p.outcomeIndex === outcomeIndex) return true;
-    if (p.outcome === 'Yes' && outcomeIndex === 1) return true;
-    if (p.outcome === 'No' && outcomeIndex === 0) return true;
-    // Fallback: match by outcome name (handles sports/non-binary markets)
-    if (outcomeName && p.outcome === outcomeName) return true;
-    return false;
-  });
-
-  return position?.avgPrice || null;
-}
-
 function changesTheadHTML() {
   return `
     <tr>
@@ -917,6 +987,7 @@ function changesTheadHTML() {
       <th>Market</th>
       <th>Side</th>
       <th>Avg Entry</th>
+      <th>Avg Exit</th>
       <th>Action</th>
       <th>Delta</th>
       <th>Size</th>
@@ -936,7 +1007,7 @@ function renderChangesTable(deltaFilter = 0, timeFilter = 'all') {
   updateEventFilterBar();
 
   if (!recentChanges?.changes) {
-    tbody.innerHTML = '<tr><td colspan="8" class="loading">Loading...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="loading">Loading...</td></tr>';
     return;
   }
 
@@ -978,7 +1049,7 @@ function renderChangesTable(deltaFilter = 0, timeFilter = 'all') {
   if (thead) thead.innerHTML = changesTheadHTML();
 
   if (changes.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" class="loading">No changes match filters</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="loading">No changes match filters</td></tr>';
     return;
   }
 
@@ -990,10 +1061,11 @@ function renderChangesTable(deltaFilter = 0, timeFilter = 'all') {
     const actionClass = c.action === 'increased' ? 'action-increased' : 'action-decreased';
     const outcomeClass = c.outcome === 'Yes' ? 'outcome-yes' : 'outcome-no';
 
-    // Get trader's average entry for this position (trade price as fallback)
-    const avgEntry = getTraderAvgEntry(c.traderAddress, c.conditionId, c.outcomeIndex, c.outcome)
-      ?? (c.price || null);
-    const avgEntryDisplay = avgEntry ? formatCents(avgEntry) : '-';
+    // Entry/exit are the trade's own execution price — a buy fills the entry
+    // column, a sell fills the exit column. Splits, merges and redeems carry
+    // no trade price (they only move the held amount), so both stay blank.
+    const avgEntryDisplay = (c.action === 'increased' && c.price) ? formatCents(c.price) : '-';
+    const avgExitDisplay = (c.action === 'decreased' && c.price) ? formatCents(c.price) : '-';
 
     // Format delta with trade price in brackets
     const tradePrice = c.price ? formatCents(c.price) : '';
@@ -1010,6 +1082,7 @@ function renderChangesTable(deltaFilter = 0, timeFilter = 'all') {
         </td>
         <td><span class="${outcomeClass}">${c.outcome || '-'}</span></td>
         <td>${avgEntryDisplay}</td>
+        <td>${avgExitDisplay}</td>
         <td class="${actionClass}">${c.action}</td>
         <td class="${c.delta >= 0 ? 'positive' : 'negative'}">${deltaDisplay}</td>
         <td>${formatUSD(Math.abs(c.size))}</td>
@@ -1039,16 +1112,29 @@ function aggregateChangesByTrader(changes) {
         marketSlug: c.marketSlug,
         netDelta: 0,
         netSize: 0,
+        // Avg entry/exit are volume-weighted over real BUY / SELL trades only.
+        // Splits, merges and redeems move the held amount (netSize) but must
+        // not dilute these price averages.
+        buyUsd: 0, buySize: 0,
+        sellUsd: 0, sellSize: 0,
         trades: 0,
         lastTimestamp: 0
       };
       groups.set(key, g);
     }
     const size = Math.abs(parseFloat(c.size) || 0);
-    g.netDelta += c.delta || 0;
-    g.netSize += (c.delta >= 0 ? size : -size);
+    const delta = c.delta || 0;
+    g.netDelta += delta;
+    g.netSize += (delta >= 0 ? size : -size);
+    if (c.action === 'increased') { g.buyUsd += Math.abs(delta); g.buySize += size; }
+    else if (c.action === 'decreased') { g.sellUsd += Math.abs(delta); g.sellSize += size; }
     g.trades += 1;
     if ((c.timestamp || 0) > g.lastTimestamp) g.lastTimestamp = c.timestamp || 0;
+  }
+
+  for (const g of groups.values()) {
+    g.avgEntry = g.buySize > 0 ? g.buyUsd / g.buySize : null;
+    g.avgExit = g.sellSize > 0 ? g.sellUsd / g.sellSize : null;
   }
 
   return Array.from(groups.values()).sort((a, b) => Math.abs(b.netDelta) - Math.abs(a.netDelta));
@@ -1068,6 +1154,7 @@ function renderTraderAggregate(changes, thead, tbody) {
         <th>Trader</th>
         <th>Side</th>
         <th>Avg Entry</th>
+        <th>Avg Exit</th>
         <th>Net Action</th>
         <th>Net Delta</th>
         <th>Net Size</th>
@@ -1078,7 +1165,7 @@ function renderTraderAggregate(changes, thead, tbody) {
 
   const rows = aggregateChangesByTrader(changes);
   if (rows.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" class="loading">No changes match filters</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="loading">No changes match filters</td></tr>';
     return;
   }
 
@@ -1090,8 +1177,9 @@ function renderTraderAggregate(changes, thead, tbody) {
     const deltaClass = isBuy ? 'positive' : 'negative';
     const deltaSign = isBuy ? '+' : '';
 
-    const avgEntry = getTraderAvgEntry(r.traderAddress, r.conditionId, r.outcomeIndex, r.outcome);
-    const avgEntryDisplay = avgEntry ? formatCents(avgEntry) : '-';
+    // Entry = VWAP of buys, exit = VWAP of sells (splits/merges excluded).
+    const avgEntryDisplay = r.avgEntry ? formatCents(r.avgEntry) : '-';
+    const avgExitDisplay = r.avgExit ? formatCents(r.avgExit) : '-';
 
     return `
       <tr>
@@ -1100,6 +1188,7 @@ function renderTraderAggregate(changes, thead, tbody) {
         </td>
         <td><span class="${outcomeClass}">${r.outcome || '-'}</span></td>
         <td>${avgEntryDisplay}</td>
+        <td>${avgExitDisplay}</td>
         <td class="${actionClass}">${actionLabel}</td>
         <td class="${deltaClass}">${deltaSign}${formatUSD(r.netDelta)}</td>
         <td>${formatShares(r.netSize)} shares</td>
@@ -1384,7 +1473,6 @@ async function loadData() {
     renderTradersTable();
     renderPortfolioSummary();
     renderPortfolioTable();
-    renderChangesSummary();
     renderChangesTable();
   } catch (error) {
     console.error('Failed to load data:', error);
@@ -1506,6 +1594,7 @@ function init() {
 
   // Timers are created exactly once here — never re-created by loadData().
   startAutoReload();
+  startLivePrices();
   loadData();
 }
 

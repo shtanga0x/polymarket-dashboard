@@ -155,29 +155,6 @@
         <button id="clear-event-filter" type="button" class="filter-btn clear-filter-btn">✕ Clear filters</button>
       </div>
 
-      <div class="summary-cards" id="changes-summary">
-        <div class="card">
-          <div class="card-label">1h Flow</div>
-          <div class="card-value" id="flow-1h">$0</div>
-        </div>
-        <div class="card">
-          <div class="card-label">6h Flow</div>
-          <div class="card-value" id="flow-6h">$0</div>
-        </div>
-        <div class="card">
-          <div class="card-label">24h Flow</div>
-          <div class="card-value" id="flow-24h">$0</div>
-        </div>
-        <div class="card">
-          <div class="card-label">7d Flow</div>
-          <div class="card-value" id="flow-7d">$0</div>
-        </div>
-        <div class="card">
-          <div class="card-label">30d Flow</div>
-          <div class="card-value" id="flow-30d">$0</div>
-        </div>
-      </div>
-
       <div class="table-container">
         <table id="changes-table">
           <thead>
@@ -187,13 +164,14 @@
               <th>Market</th>
               <th>Side</th>
               <th>Avg Entry</th>
+              <th>Avg Exit</th>
               <th>Action</th>
               <th>Delta</th>
               <th>Size</th>
             </tr>
           </thead>
           <tbody id="changes-tbody">
-            <tr><td colspan="8" class="loading">Loading changes...</td></tr>
+            <tr><td colspan="9" class="loading">Loading changes...</td></tr>
           </tbody>
         </table>
       </div>
