@@ -21,5 +21,5 @@
   "scrape_pnl_interval_minutes": 60,
   "scrape_concurrency": 4,
   "inactivity_timeout_minutes": 30,
-  "auto_reload_seconds": 60
+  "auto_reload_seconds": 30
 }
