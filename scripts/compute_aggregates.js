@@ -812,8 +812,13 @@ export function processRecentChanges(activity, traderPortfolios, maxEvents = 200
   }
 
   // Cap the OUTPUT feed only — windowSummaries above already saw the full
-  // activity set (activity arrives sorted by timestamp descending).
-  return { changes: changes.slice(0, maxEvents), windowSummaries };
+  // activity set (activity arrives sorted by timestamp descending). Bound it to
+  // the last 24h AND to maxEvents: 24h is the intended window, and the event cap
+  // stops a hyperactive stretch from bloating the file. The portfolio change
+  // columns use the full activity separately, so this only trims the feed list.
+  const feedCutoff = now - 24 * 3600;
+  const feed = changes.filter(c => (c.timestamp || 0) >= feedCutoff).slice(0, maxEvents);
+  return { changes: feed, windowSummaries };
 }
 
 /**
