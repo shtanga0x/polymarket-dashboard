@@ -1053,7 +1053,15 @@ function renderChangesTable(deltaFilter = 0, timeFilter = 'all') {
     return;
   }
 
-  tbody.innerHTML = changes.map(c => {
+  // The feed can hold ~24h of changes (up to 20k). Render only the first slice
+  // as DOM rows so the table stays responsive; the filters above narrow it.
+  const MAX_CHANGE_ROWS = 1000;
+  const shown = changes.slice(0, MAX_CHANGE_ROWS);
+  const truncatedNote = changes.length > MAX_CHANGE_ROWS
+    ? `<tr><td colspan="9" class="loading">Showing first ${MAX_CHANGE_ROWS.toLocaleString()} of ${changes.length.toLocaleString()} changes — narrow with the filters above.</td></tr>`
+    : '';
+
+  tbody.innerHTML = shown.map(c => {
     const marketUrl = c.eventSlug
       ? polymarketUrl('/event/' + c.eventSlug)
       : polymarketUrl('/market/' + c.marketSlug);
@@ -1088,7 +1096,7 @@ function renderChangesTable(deltaFilter = 0, timeFilter = 'all') {
         <td>${formatUSD(Math.abs(c.size))}</td>
       </tr>
     `;
-  }).join('');
+  }).join('') + truncatedNote;
 }
 
 /**
