@@ -42,14 +42,26 @@ function parseCSV(content) {
 }
 
 /**
- * Load traders from the site's CSV (config.traders_csv, relative to rootDir).
+ * Load traders from the unified CSV (config.traders_csv, relative to rootDir).
+ *
+ * The single data/traders.csv is the source of truth for every site. Each site
+ * selects which tiers it shows via config.include_tiers — core = [1],
+ * watch = [1, 2]. Tier 0 means delisted: the row stays in the file as a record
+ * but is excluded from every dashboard and all accounting. A missing tier
+ * defaults to 1 (matching the historical default elsewhere in this module).
  */
 export function loadTraders(rootDir, config) {
   const csvPath = path.join(rootDir, config.traders_csv);
   const content = fs.readFileSync(csvPath, 'utf-8');
   const traders = parseCSV(content);
-  // Filter out traders without valid wallet addresses
-  return traders.filter(t => t.address && t.address.startsWith('0x'));
+  const includeTiers = (config.include_tiers || [1]).map(String);
+  // Filter out traders without valid wallet addresses and any tier not selected
+  // by this site (which also drops tier 0 / delisted traders).
+  return traders.filter(t =>
+    t.address &&
+    t.address.startsWith('0x') &&
+    includeTiers.includes(String(t.tier || '1'))
+  );
 }
 
 /**

@@ -3,7 +3,8 @@
  * Main entry point for fetching Polymarket data and generating JSON files.
  *
  * Site-parameterized: pass the site via --site <core|watch> or SITE env var.
- * Reads config/<site>.json and data/<site>/traders.csv, writes out/<site>/data/.
+ * Reads config/<site>.json and the unified data/traders.csv (filtered to the
+ * site's config.include_tiers), writes out/<site>/data/.
  *
  * Previous-run state (for recent-changes diffing and the PnL scrape cache) is
  * expected in the output dir BEFORE this script runs — the CI workflow downloads
