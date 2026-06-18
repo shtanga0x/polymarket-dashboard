@@ -2,21 +2,31 @@
 
 Unified codebase for the Polymarket trader dashboards:
 
-| Site | Trader list | Data feed |
+| Site | Tiers shown | Data feed |
 |---|---|---|
-| [core.shtanga.xyz](https://core.shtanga.xyz) | `data/core/traders.csv` | `data.shtanga.xyz/core` |
-| [watch.shtanga.xyz](https://watch.shtanga.xyz) | `data/watch/traders.csv` | `data.shtanga.xyz/watch` |
+| [core.shtanga.xyz](https://core.shtanga.xyz) | tier 1 | `data.shtanga.xyz/core` |
+| [watch.shtanga.xyz](https://watch.shtanga.xyz) | tier 1 + 2 | `data.shtanga.xyz/watch` |
 
-One codebase, two deployments. Everything is shared except per-site config and
-trader lists. Supersedes the archived `polymarket_core` and `polymarket_watch`
+One codebase, two deployments, **one trader list**. Everything is shared except
+per-site config. Supersedes the archived `polymarket_core` and `polymarket_watch`
 repos (their git histories were 99% five-minute data-snapshot commits, 1.9–3.9 GB).
+
+### Trader tiers (single source of truth)
+
+`data/traders.csv` is the only trader list. Each row's `tier` column decides where
+it shows; each site picks its tiers via `include_tiers` in `config/<site>.json`:
+
+- **tier 1** → core (and watch)
+- **tier 2** → watch only
+- **tier 0** → delisted: kept in the file as a record, excluded from every
+  dashboard and all accounting
 
 ## Layout
 
 ```
 config/core.json, watch.json   per-site config: branding, data URLs, R2 buckets,
                                polling/concurrency limits, referral code
-data/<site>/traders.csv        per-site trader lists (the ONLY regularly edited per-site files)
+data/traders.csv               single unified trader list; tier column gates each site (the ONLY regularly edited data file)
 site/                          shared frontend (index.html, app.js, style.css)
 site/assets/site-config.js     generated at deploy from config/<site>.json — never edit
 scripts/                       shared data pipeline (fetch → aggregate → upload)
@@ -31,8 +41,9 @@ worker/                        Cloudflare worker: cron + manual refresh dispatch
 - **Edit frontend or pipeline code** → push to `main` → `deploy-site.yml` deploys the
   identical bundle to BOTH buckets (with per-site `site-config.js` injected). One fix,
   both sites. No more hand-porting between repos.
-- **Add/remove a trader** → edit `data/<site>/traders.csv` → picked up by the next
-  data refresh (≤2 min). No site deploy involved.
+- **Add/remove a trader** → edit `data/traders.csv` (set its `tier`) → picked up by
+  the next data refresh (≤2 min). No site deploy involved. Set `tier` to `0` to
+  delist a trader from both dashboards while keeping the row as a record.
 - **Change a site setting** (poll rate, branding, referral, limits) → edit
   `config/<site>.json` → site deploy + next data run pick it up.
 - **Data refresh cadence**: Cloudflare worker cron dispatches every 2 min; workflow
