@@ -397,6 +397,27 @@ main {
   stroke-linejoin: round;
 }
 
+.odds-filter {
+  height: 34px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0 0.6rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.odds-filter:hover {
+  border-color: var(--accent-blue);
+}
+
+.odds-filter:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+}
+
 .filter-tooltip {
   position: relative;
   display: inline-flex;

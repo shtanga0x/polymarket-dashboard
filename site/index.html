@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/style.css?v=unified-20260612">
+  <link rel="stylesheet" href="assets/style.css?v=unified-20260618">
 </head>
 <body>
   <div class="top-shell">
@@ -70,6 +70,20 @@
       <div class="section-header">
         <h2>Aggregated Portfolio</h2>
         <div class="portfolio-actions">
+          <span class="filter-tooltip" data-tooltip="Show only events where an outcome's current odds fall in the selected range (0&ndash;Xc). Both YES and NO sides stay visible for every matching event.">
+            <select id="odds-filter" class="odds-filter" aria-label="Filter events by odds range">
+              <option value="0.10">0&ndash;10c</option>
+              <option value="0.20">0&ndash;20c</option>
+              <option value="0.30">0&ndash;30c</option>
+              <option value="0.40">0&ndash;40c</option>
+              <option value="0.50">0&ndash;50c</option>
+              <option value="0.60">0&ndash;60c</option>
+              <option value="0.70">0&ndash;70c</option>
+              <option value="0.80">0&ndash;80c</option>
+              <option value="0.90">0&ndash;90c</option>
+              <option value="1.00" selected>0&ndash;100c</option>
+            </select>
+          </span>
           <span class="filter-tooltip" data-tooltip="Hide near-balanced YES/NO positions (<10% share gap).">
             <button id="balanced-filter-btn" class="icon-toggle-btn" type="button" aria-pressed="false" aria-label="Hide near-balanced positions"></button>
           </span>
@@ -283,6 +297,11 @@
           <li><strong>Balanced pairs filter</strong> — some traders hold both YES and NO of the same
             market (market-making / hedging, not directional opinion). The filter hides those so you
             see real conviction only.</li>
+          <li><strong>Odds range filter</strong> — the dropdown next to the eye icon narrows the
+            Portfolio to events whose current odds fall in a 0&ndash;Xc band (0&ndash;100c by default
+            = everything). An event is kept if <em>either</em> outcome's odds sit in the range, and
+            both YES and NO sides stay visible — useful for isolating longshots (e.g. 0&ndash;20c) or
+            coin-flip markets out of the full book.</li>
           <li><strong>Expiration</strong> — a heavy position expiring in days is a sharper signal than
             the same position six months out.</li>
           <li><strong>Freshness</strong> — the timestamp next to the tabs shows the last data refresh.
@@ -344,6 +363,6 @@
   </footer>
 
   <script src="assets/site-config.js"></script>
-  <script src="assets/app.js?v=unified-20260615"></script>
+  <script src="assets/app.js?v=unified-20260618"></script>
 </body>
 </html>
