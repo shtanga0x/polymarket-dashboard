@@ -65,6 +65,11 @@ let loadedSnapshot = null;
 // Portfolio sort state. `mode` is 'abs' or 'rel' and only applies to change columns.
 let portfolioSort = { column: 'totalExposure', direction: 'desc', mode: 'abs' };
 let hideBalancedPairs = false;
+// Odds-range filter on the Portfolio table. Upper bound as a price fraction
+// (current market odds): 1.0 = 0–100c = show everything (default). When set
+// lower, an event is kept only if ANY of its outcomes' current odds are at or
+// below the bound — and both YES and NO sides of every kept event stay visible.
+let oddsFilterMax = 1.0;
 
 // Recent Changes "Aggregate" toggle: when true, the changes-table is replaced
 // with a portfolio-style aggregate of just the positions that match the active
@@ -204,6 +209,36 @@ function filterBalancedPositions(positions) {
   if (!hideBalancedPairs || !positions?.length) return positions || [];
   const balancedConditionIds = getNearBalancedConditionIds(positions);
   return positions.filter(position => !balancedConditionIds.has(position.conditionId));
+}
+
+/**
+ * Current market odds of a position as a 0–1 price fraction. Uses the live
+ * midpoint (`curPrice`); falls back to the average entry price when the
+ * midpoint is missing. Returns null when neither is available.
+ */
+function getPositionOdds(position) {
+  const cur = parseFloat(position?.curPrice);
+  if (Number.isFinite(cur)) return cur;
+  const entry = parseFloat(position?.avgEntry);
+  return Number.isFinite(entry) ? entry : null;
+}
+
+/**
+ * Keep only events that have at least one outcome whose current odds fall in
+ * the selected 0–Xc range. Both YES and NO sides of each matching event are
+ * retained; events entirely outside the range are dropped. At the default
+ * 0–100c bound nothing is filtered.
+ */
+function filterByOddsRange(positions) {
+  if (oddsFilterMax >= 1 || !positions?.length) return positions || [];
+  const passing = new Set();
+  for (const position of positions) {
+    if (!position?.conditionId) continue;
+    const odds = getPositionOdds(position);
+    if (odds != null && odds <= oddsFilterMax + 1e-9) passing.add(position.conditionId);
+  }
+  // Positions without a conditionId can't be grouped into an event — keep them.
+  return positions.filter(p => !p.conditionId || passing.has(p.conditionId));
 }
 
 function formatExposureWithShares(exposure, shares) {
@@ -969,7 +1004,7 @@ function renderPortfolioTable() {
     updateBalancedFilterButton();
     return;
   }
-  const positions = filterBalancedPositions(aggregatedPortfolio.positions);
+  const positions = filterByOddsRange(filterBalancedPositions(aggregatedPortfolio.positions));
   renderPositionsAsPortfolioStyle(
     positions,
     thead,
@@ -1294,6 +1329,17 @@ function initBalancedFilterToggle() {
   });
 }
 
+function initOddsFilter() {
+  const sel = document.getElementById('odds-filter');
+  if (!sel) return;
+  sel.value = oddsFilterMax.toFixed(2);
+  sel.addEventListener('change', () => {
+    const v = parseFloat(sel.value);
+    oddsFilterMax = Number.isFinite(v) ? v : 1.0;
+    renderPortfolioTable();
+  });
+}
+
 /**
  * Track user activity
  */
@@ -1595,6 +1641,7 @@ function init() {
   initFilters();
   initSearch();
   initBalancedFilterToggle();
+  initOddsFilter();
   initRefresh();
   initUpdateTrigger();
   initChecker();
