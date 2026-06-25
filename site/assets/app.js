@@ -69,6 +69,9 @@ let hideBalancedPairs = false;
 // section in the Portfolio table, and events are ranked by their biggest
 // single market (so the overall size sort is preserved).
 let stackEvents = false;
+// Event-stack keys (see renderStackedEvents) the user has folded shut. Persists
+// across re-renders so live-price refreshes don't reopen collapsed sections.
+const collapsedEventStacks = new Set();
 // Odds-range filter on the Portfolio table. Upper bound as a price fraction
 // (current market odds): 1.0 = 0–100c = show everything (default). When set
 // lower, an event is kept only if ANY of its outcomes' current odds are at or
@@ -1049,20 +1052,29 @@ function renderStackedEvents(sortedMarkets, totalExposure) {
     const eventTitle = humanizeEventTitle(eventSlug);
     const eventUrl = polymarketUrl('/event/' + eventSlug);
     const icon = markets[0].icon;
+    const collapsed = collapsedEventStacks.has(key);
 
     html += `
-      <tr class="event-stack-header">
+      <tr class="event-stack-header${collapsed ? ' collapsed' : ''}">
         <td class="market-index">${eventRank}</td>
         <td colspan="11">
           <div class="event-stack-header-inner">
             ${icon ? `<img src="${icon}" class="market-icon" alt="">` : ''}
             <a href="${eventUrl}" target="_blank" class="market-link event-stack-title">${eventTitle}</a>
             <span class="event-stack-meta">${markets.length} markets</span>
+            <button type="button" class="event-fold-btn${collapsed ? ' collapsed' : ''}"
+              onclick="toggleEventStack('${key.replace(/'/g, "\\'")}')"
+              aria-expanded="${collapsed ? 'false' : 'true'}"
+              aria-label="${collapsed ? 'Show' : 'Hide'} this event's markets"
+              title="${collapsed ? 'Show' : 'Hide'} this event's ${markets.length} markets">${CHEVRON_ICON}</button>
             <span class="event-stack-meta event-stack-exposure">${formatUSD(eventExposure)} &middot; ${eventAllocPct.toFixed(2)}%</span>
           </div>
         </td>
       </tr>
     `;
+
+    // Folded sections show only the header; the rows are omitted entirely.
+    if (collapsed) continue;
 
     // Markets inside the section drop their own "#"; the event header owns it.
     for (const m of markets) {
@@ -1408,6 +1420,27 @@ const STACK_ICON = `
     <path d="M3 16l9 5 9-5"></path>
   </svg>
 `;
+
+// Chevron used on event-stack section headers; CSS rotates it when collapsed.
+const CHEVRON_ICON = `
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+`;
+
+/**
+ * Fold/unfold an event-stack section. State lives in `collapsedEventStacks` so
+ * it survives the table re-render (and any live-price refresh after it).
+ */
+function toggleEventStack(key) {
+  if (collapsedEventStacks.has(key)) collapsedEventStacks.delete(key);
+  else collapsedEventStacks.add(key);
+  renderPortfolioTable();
+  // Mirror into the aggregate-changes view if it's currently stacked there too.
+  if (changesAggregateMode) {
+    const dF = parseInt(document.getElementById('delta-filter')?.value || 0);
+    const tF = document.getElementById('time-filter')?.value || 'all';
+    renderChangesTable(dF, tF);
+  }
+}
 
 function updateStackEventsButton() {
   const btn = document.getElementById('stack-events-btn');
