@@ -65,6 +65,10 @@ let loadedSnapshot = null;
 // Portfolio sort state. `mode` is 'abs' or 'rel' and only applies to change columns.
 let portfolioSort = { column: 'totalExposure', direction: 'desc', mode: 'abs' };
 let hideBalancedPairs = false;
+// When true, markets from the same Polymarket event are grouped into one
+// section in the Portfolio table, and events are ranked by their biggest
+// single market (so the overall size sort is preserved).
+let stackEvents = false;
 // Odds-range filter on the Portfolio table. Upper bound as a price fraction
 // (current market odds): 1.0 = 0–100c = show everything (default). When set
 // lower, an event is kept only if ANY of its outcomes' current odds are at or
@@ -968,29 +972,117 @@ function renderPositionsAsPortfolioStyle(positions, theadEl, tbodyEl, totalExpos
   const totalExposure = totalExposureOverride
     ?? sortedMarkets.reduce((sum, m) => sum + (m.totalExposure || 0), 0);
 
-  let html = '';
-  sortedMarkets.forEach((market) => {
-    const marketInfo = {
-      index: market._exposureRank,
-      title: market.title,
-      slug: market.slug,
-      icon: market.icon,
-      eventSlug: market.eventSlug,
-      endDate: market.endDate
-    };
+  const html = stackEvents
+    ? renderStackedEvents(sortedMarkets, totalExposure)
+    : sortedMarkets.map((m) => renderMarketRows(m, totalExposure)).join('');
 
-    market.outcomes.forEach((outcome, outcomeIdx) => {
-      html += renderOutcomeRow(
+  tbodyEl.innerHTML = html;
+}
+
+/**
+ * Render one grouped market (its Yes/No outcome rows) as portfolio table rows.
+ * `indexOverride` blanks or replaces the leading "#" cell — used in event-stack
+ * mode where the rank lives on the event header instead of each market.
+ */
+function renderMarketRows(market, totalExposure, indexOverride) {
+  const marketInfo = {
+    index: indexOverride !== undefined ? indexOverride : market._exposureRank,
+    title: market.title,
+    slug: market.slug,
+    icon: market.icon,
+    eventSlug: market.eventSlug,
+    endDate: market.endDate
+  };
+
+  return market.outcomes
+    .map((outcome, outcomeIdx) =>
+      renderOutcomeRow(
         outcome,
         totalExposure,
         outcomeIdx === 0,
         market.outcomes.length,
         marketInfo
-      );
-    });
-  });
+      )
+    )
+    .join('');
+}
 
-  tbodyEl.innerHTML = html;
+/**
+ * Event-stack render: collapse markets that share an event into one section.
+ *
+ * `sortedMarkets` is already globally sorted, so the first market seen for an
+ * event is its strongest by the active sort. Grouping in first-seen order thus
+ * ranks events by their biggest single market ("biggest allocation of one
+ * market inside the event") while still honouring whatever column is sorted.
+ * Inside a section the markets keep that same sorted order, so the real
+ * allocations within a single event are visible side by side.
+ */
+function renderStackedEvents(sortedMarkets, totalExposure) {
+  const order = [];
+  const groups = new Map();
+  for (const m of sortedMarkets) {
+    // Markets without an eventSlug are their own singleton "event".
+    const key = m.eventSlug ? 'e:' + m.eventSlug : 'c:' + m.conditionId;
+    if (!groups.has(key)) {
+      groups.set(key, []);
+      order.push(key);
+    }
+    groups.get(key).push(m);
+  }
+
+  let html = '';
+  let eventRank = 0;
+  for (const key of order) {
+    const markets = groups.get(key);
+    eventRank++;
+
+    // A lone market in an event needs no section chrome — render it as usual,
+    // but renumber it into the same sequential rank stream as the sections.
+    if (markets.length < 2) {
+      html += renderMarketRows(markets[0], totalExposure, eventRank);
+      continue;
+    }
+
+    const eventExposure = markets.reduce((s, m) => s + (m.totalExposure || 0), 0);
+    const eventAllocPct = totalExposure > 0 ? (eventExposure / totalExposure) * 100 : 0;
+    const eventSlug = markets[0].eventSlug;
+    const eventTitle = humanizeEventTitle(eventSlug);
+    const eventUrl = polymarketUrl('/event/' + eventSlug);
+    const icon = markets[0].icon;
+
+    html += `
+      <tr class="event-stack-header">
+        <td class="market-index">${eventRank}</td>
+        <td colspan="11">
+          <div class="event-stack-header-inner">
+            ${icon ? `<img src="${icon}" class="market-icon" alt="">` : ''}
+            <a href="${eventUrl}" target="_blank" class="market-link event-stack-title">${eventTitle}</a>
+            <span class="event-stack-meta">${markets.length} markets</span>
+            <span class="event-stack-meta event-stack-exposure">${formatUSD(eventExposure)} &middot; ${eventAllocPct.toFixed(2)}%</span>
+          </div>
+        </td>
+      </tr>
+    `;
+
+    // Markets inside the section drop their own "#"; the event header owns it.
+    for (const m of markets) {
+      html += renderMarketRows(m, totalExposure, '');
+    }
+  }
+  return html;
+}
+
+/**
+ * Turn an event slug into a readable title, e.g.
+ * "democratic-presidential-nominee-2028" → "Democratic Presidential Nominee 2028".
+ * Positions carry no explicit event title, so this is derived client-side.
+ */
+function humanizeEventTitle(slug) {
+  if (!slug) return 'Event';
+  return slug
+    .split('-')
+    .map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1) : w))
+    .join(' ');
 }
 
 /**
@@ -1002,6 +1094,7 @@ function renderPortfolioTable() {
   if (!aggregatedPortfolio?.positions) {
     if (tbody) tbody.innerHTML = '<tr><td colspan="12" class="loading">Loading...</td></tr>';
     updateBalancedFilterButton();
+    updateStackEventsButton();
     return;
   }
   const positions = filterByOddsRange(filterBalancedPositions(aggregatedPortfolio.positions));
@@ -1012,6 +1105,7 @@ function renderPortfolioTable() {
     aggregatedPortfolio.summary?.totalExposure
   );
   updateBalancedFilterButton();
+  updateStackEventsButton();
 }
 
 function changesTheadHTML() {
@@ -1306,6 +1400,34 @@ const EYE_OFF_ICON = `
     <path d="M6.6 6.8A17.3 17.3 0 0 0 2.1 12s3.6 6.6 9.9 6.6c1.6 0 3-.4 4.2-.9"></path>
   </svg>
 `;
+
+const STACK_ICON = `
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M12 3 3 8l9 5 9-5-9-5Z"></path>
+    <path d="M3 12l9 5 9-5"></path>
+    <path d="M3 16l9 5 9-5"></path>
+  </svg>
+`;
+
+function updateStackEventsButton() {
+  const btn = document.getElementById('stack-events-btn');
+  if (!btn) return;
+  btn.innerHTML = STACK_ICON;
+  btn.classList.toggle('active', stackEvents);
+  btn.setAttribute('aria-pressed', stackEvents ? 'true' : 'false');
+  btn.setAttribute(
+    'aria-label',
+    stackEvents ? 'Unstack markets by event' : 'Stack markets by event'
+  );
+}
+
+function initStackEventsToggle() {
+  updateStackEventsButton();
+  document.getElementById('stack-events-btn')?.addEventListener('click', () => {
+    stackEvents = !stackEvents;
+    renderPortfolioTable();
+  });
+}
 
 function updateBalancedFilterButton() {
   const btn = document.getElementById('balanced-filter-btn');
@@ -1641,6 +1763,7 @@ function init() {
   initFilters();
   initSearch();
   initBalancedFilterToggle();
+  initStackEventsToggle();
   initOddsFilter();
   initRefresh();
   initUpdateTrigger();
