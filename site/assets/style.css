@@ -397,6 +397,37 @@ main {
   stroke-linejoin: round;
 }
 
+/* Event-stack section header rows in the Portfolio table */
+.event-stack-header td {
+  background: color-mix(in srgb, var(--accent-blue) 8%, var(--bg-tertiary));
+  border-top: 2px solid var(--border-color);
+}
+
+.event-stack-header .market-index {
+  font-weight: 700;
+  color: var(--accent-blue);
+}
+
+.event-stack-header-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.event-stack-title {
+  font-weight: 700;
+}
+
+.event-stack-meta {
+  font-size: 0.85em;
+  color: var(--text-secondary);
+}
+
+.event-stack-exposure {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
 .odds-filter {
   height: 34px;
   background: var(--bg-tertiary);
