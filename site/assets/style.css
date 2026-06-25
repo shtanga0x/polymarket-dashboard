@@ -428,6 +428,44 @@ main {
   font-variant-numeric: tabular-nums;
 }
 
+.event-fold-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.event-fold-btn:hover {
+  color: var(--accent-blue);
+  border-color: var(--accent-blue);
+}
+
+.event-fold-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.event-fold-btn svg path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Collapsed: chevron points right (expand affordance). */
+.event-fold-btn.collapsed svg {
+  transform: rotate(-90deg);
+}
+
 .odds-filter {
   height: 34px;
   background: var(--bg-tertiary);
