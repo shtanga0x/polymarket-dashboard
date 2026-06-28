@@ -383,6 +383,19 @@ main {
   background: color-mix(in srgb, var(--accent-blue) 12%, var(--bg-tertiary));
 }
 
+/* Folded state: solid fill so it reads as a third, "compressed" state distinct
+   from the outlined expanded state. */
+.icon-toggle-btn.folded {
+  color: #fff;
+  background: var(--accent-blue);
+  border-color: var(--accent-blue);
+}
+
+.icon-toggle-btn.folded svg path {
+  fill: currentColor;
+  stroke: currentColor;
+}
+
 .icon-toggle-btn svg {
   width: 18px;
   height: 18px;

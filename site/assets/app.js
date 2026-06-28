@@ -65,13 +65,26 @@ let loadedSnapshot = null;
 // Portfolio sort state. `mode` is 'abs' or 'rel' and only applies to change columns.
 let portfolioSort = { column: 'totalExposure', direction: 'desc', mode: 'abs' };
 let hideBalancedPairs = false;
-// When true, markets from the same Polymarket event are grouped into one
-// section in the Portfolio table, and events are ranked by their biggest
-// single market (so the overall size sort is preserved).
-let stackEvents = false;
-// Event-stack keys (see renderStackedEvents) the user has folded shut. Persists
-// across re-renders so live-price refreshes don't reopen collapsed sections.
-const collapsedEventStacks = new Set();
+// Markets from the same Polymarket event are grouped into one section in the
+// Portfolio table, with events ranked by their biggest single market (so the
+// overall size sort is preserved).
+// Event-stack display mode, cycled by the stack toggle button:
+//   'off'      — no stacking
+//   'expanded' — stacked, sections open by default
+//   'folded'   — stacked, sections collapsed by default
+let stackEvents = 'off';
+// Per-section exceptions to the current default fold state (keyed as in
+// renderStackedEvents). A key here means "the opposite of the mode default":
+// in 'expanded' mode it's a folded section, in 'folded' mode an opened one.
+// Cleared whenever the global mode changes; persists across re-renders so
+// live-price refreshes keep the user's per-section choices.
+const eventStackOverrides = new Set();
+// True when a section should render collapsed, combining the global default
+// (from the mode) with any per-section override.
+function isEventStackCollapsed(key) {
+  const defaultCollapsed = stackEvents === 'folded';
+  return eventStackOverrides.has(key) ? !defaultCollapsed : defaultCollapsed;
+}
 // Odds-range filter on the Portfolio table. Upper bound as a price fraction
 // (current market odds): 1.0 = 0–100c = show everything (default). When set
 // lower, an event is kept only if ANY of its outcomes' current odds are at or
@@ -975,7 +988,7 @@ function renderPositionsAsPortfolioStyle(positions, theadEl, tbodyEl, totalExpos
   const totalExposure = totalExposureOverride
     ?? sortedMarkets.reduce((sum, m) => sum + (m.totalExposure || 0), 0);
 
-  const html = stackEvents
+  const html = stackEvents !== 'off'
     ? renderStackedEvents(sortedMarkets, totalExposure)
     : sortedMarkets.map((m) => renderMarketRows(m, totalExposure)).join('');
 
@@ -1052,7 +1065,7 @@ function renderStackedEvents(sortedMarkets, totalExposure) {
     const eventTitle = humanizeEventTitle(eventSlug);
     const eventUrl = polymarketUrl('/event/' + eventSlug);
     const icon = markets[0].icon;
-    const collapsed = collapsedEventStacks.has(key);
+    const collapsed = isEventStackCollapsed(key);
 
     html += `
       <tr class="event-stack-header${collapsed ? ' collapsed' : ''}">
@@ -1426,15 +1439,10 @@ const CHEVRON_ICON = `
   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
 `;
 
-/**
- * Fold/unfold an event-stack section. State lives in `collapsedEventStacks` so
- * it survives the table re-render (and any live-price refresh after it).
- */
-function toggleEventStack(key) {
-  if (collapsedEventStacks.has(key)) collapsedEventStacks.delete(key);
-  else collapsedEventStacks.add(key);
+// Re-render the portfolio table, mirroring into the aggregate-changes view when
+// that's the active stacked surface.
+function rerenderStackedSurfaces() {
   renderPortfolioTable();
-  // Mirror into the aggregate-changes view if it's currently stacked there too.
   if (changesAggregateMode) {
     const dF = parseInt(document.getElementById('delta-filter')?.value || 0);
     const tF = document.getElementById('time-filter')?.value || 'all';
@@ -1442,23 +1450,43 @@ function toggleEventStack(key) {
   }
 }
 
+/**
+ * Fold/unfold a single event-stack section by flipping its override relative to
+ * the current mode default. State survives re-renders (and live-price refreshes)
+ * via `eventStackOverrides`.
+ */
+function toggleEventStack(key) {
+  if (eventStackOverrides.has(key)) eventStackOverrides.delete(key);
+  else eventStackOverrides.add(key);
+  rerenderStackedSurfaces();
+}
+
 function updateStackEventsButton() {
   const btn = document.getElementById('stack-events-btn');
   if (!btn) return;
   btn.innerHTML = STACK_ICON;
-  btn.classList.toggle('active', stackEvents);
-  btn.setAttribute('aria-pressed', stackEvents ? 'true' : 'false');
-  btn.setAttribute(
-    'aria-label',
-    stackEvents ? 'Unstack markets by event' : 'Stack markets by event'
-  );
+  btn.classList.toggle('active', stackEvents !== 'off');
+  btn.classList.toggle('folded', stackEvents === 'folded');
+  btn.setAttribute('aria-pressed', stackEvents !== 'off' ? 'true' : 'false');
+  const label = stackEvents === 'off'
+    ? 'Stack markets by event'
+    : stackEvents === 'expanded'
+      ? 'Stacked — click to collapse all events'
+      : 'Stacked & collapsed — click to unstack';
+  btn.setAttribute('aria-label', label);
+  btn.setAttribute('title', label);
 }
 
 function initStackEventsToggle() {
   updateStackEventsButton();
   document.getElementById('stack-events-btn')?.addEventListener('click', () => {
-    stackEvents = !stackEvents;
-    renderPortfolioTable();
+    // Cycle off → expanded → folded → off. Each mode change resets per-section
+    // overrides so every event follows the new default.
+    stackEvents = stackEvents === 'off' ? 'expanded'
+      : stackEvents === 'expanded' ? 'folded'
+      : 'off';
+    eventStackOverrides.clear();
+    rerenderStackedSurfaces();
   });
 }
 
