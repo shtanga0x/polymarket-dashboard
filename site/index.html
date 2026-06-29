@@ -316,7 +316,7 @@
         <ul>
           <li><strong>Pipeline</strong> — a GitHub Actions job runs every minute:
             it pulls each tracked wallet's positions, balances and activity from the Polymarket APIs
-            (through rotating proxies, with retries), scrapes all-time PnL (cached ~1h),
+            (through rotating proxies, with retries), fetches all-time PnL (cached ~1h),
             aggregates everything, and diffs against the previous run to produce the Recent Changes feed.</li>
           <li><strong>Storage</strong> — results are published to Cloudflare R2 as immutable snapshots
             plus a tiny <code>metadata.json</code> pointer that flips only after a snapshot is fully

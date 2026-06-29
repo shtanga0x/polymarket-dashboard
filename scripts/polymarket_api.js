@@ -9,6 +9,7 @@ import { getProxyAgent } from './proxy_manager.js';
 
 const DATA_API_BASE = 'https://data-api.polymarket.com';
 const LEADERBOARD_API_BASE = 'https://lb-api.polymarket.com';
+const USER_PNL_API_BASE = 'https://user-pnl-api.polymarket.com';
 const POLYGON_RPC = 'https://polygon-bor-rpc.publicnode.com';
 
 // Collateral token contracts on Polygon
@@ -167,6 +168,27 @@ export async function fetchWalletTrades(address, limit = 500, config = {}) {
   const url = `${DATA_API_BASE}/trades?user=${address.toLowerCase()}&limit=${limit}`;
   const data = await fetchWithRetry(url, {}, config);
   return data || [];
+}
+
+/**
+ * Fetch a wallet's all-time PnL from Polymarket's user-pnl API.
+ *
+ * Returns the last point of the cumulative P/L series (= current all-time
+ * profit/loss), or null when unavailable. This replaces the old HTML profile
+ * scrape, which silently broke when Polymarket migrated to the Next.js App
+ * Router — profile pages no longer embed __NEXT_DATA__, so the scrape always
+ * returned null and the pipeline fell back to unrealized-only PnL.
+ *
+ * @param {string} address - Wallet address
+ * @param {object} config - Config object
+ * @returns {Promise<number|null>} All-time PnL in USD, or null
+ */
+export async function fetchAllTimePnL(address, config = {}) {
+  const url = `${USER_PNL_API_BASE}/user-pnl?user_address=${address.toLowerCase()}&interval=all&fidelity=1d`;
+  const data = await fetchWithRetry(url, {}, config);
+  if (!Array.isArray(data) || data.length === 0) return null;
+  const p = parseFloat(data[data.length - 1]?.p);
+  return Number.isFinite(p) ? p : null;
 }
 
 /**
@@ -376,6 +398,7 @@ export default {
   fetchWalletActivity,
   fetchWalletValue,
   fetchWalletTrades,
+  fetchAllTimePnL,
   fetchUsdcBalance,
   fetchAllActivity,
   calculatePnLFromActivity,

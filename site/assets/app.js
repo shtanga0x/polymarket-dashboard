@@ -1908,28 +1908,20 @@ async function fetchCheckerValue(address) {
 }
 
 /**
- * Scrape profile for PnL data
+ * Fetch all-time PnL from Polymarket's user-pnl API.
+ * (The old HTML profile scrape broke when Polymarket moved to the App Router —
+ * profile pages no longer embed __NEXT_DATA__.)
  */
 async function fetchCheckerPnL(address) {
   try {
-    const response = await fetch(`https://polymarket.com/profile/${address}`, {
-      headers: {
-        'Accept': 'text/html'
-      }
-    });
+    const response = await fetch(
+      `https://user-pnl-api.polymarket.com/user-pnl?user_address=${address.toLowerCase()}&interval=all&fidelity=1d`
+    );
     if (!response.ok) return null;
-    const html = await response.text();
-    const match = html.match(/__NEXT_DATA__[^>]*>({.*?})<\/script>/);
-    if (!match) return null;
-    const data = JSON.parse(match[1]);
-    const queries = data.props?.pageProps?.dehydratedState?.queries || [];
-    for (const q of queries) {
-      const d = q.state?.data;
-      if (d && typeof d.pnl === 'number') {
-        return d.pnl;
-      }
-    }
-    return null;
+    const data = await response.json();
+    if (!Array.isArray(data) || data.length === 0) return null;
+    const p = parseFloat(data[data.length - 1]?.p);
+    return Number.isFinite(p) ? p : null;
   } catch {
     return null;
   }

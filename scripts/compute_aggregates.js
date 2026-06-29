@@ -14,11 +14,13 @@ import {
   fetchWalletActivity,
   fetchWalletValue,
   fetchUsdcBalance,
+  fetchAllTimePnL,
   batchFetch
 } from './polymarket_api.js';
-import { batchScrapeProfilesParallel } from './scrape_profile.js';
 
-const PNL_LOOKUP_VERSION = 2;
+// Bumped to 3 when the all-time PnL source switched from the (broken) HTML
+// profile scrape to the user-pnl API — invalidates cached unrealized-only values.
+const PNL_LOOKUP_VERSION = 3;
 
 /**
  * Parse CSV file
@@ -106,11 +108,12 @@ function computeExposure(position) {
 /**
  * Fetch and process all trader portfolios.
  *
- * PnL scrape-cache: traders whose previously scraped PnL is younger than
+ * PnL cache: traders whose previously fetched all-time PnL is younger than
  * config.scrape_pnl_interval_minutes reuse the cached value; only stale
- * entries are re-scraped, in parallel batches of config.scrape_concurrency.
+ * entries are re-fetched (user-pnl API), in parallel batches of
+ * config.scrape_concurrency.
  *
- * @returns {Promise<{traderPortfolios: object, pnlStats: {cached: number, scraped: number, failed: number}}>}
+ * @returns {Promise<{traderPortfolios: object, pnlStats: {cached: number, fetched: number, failed: number}}>}
  */
 export async function fetchAllPortfolios(traders, config, dataDir) {
   console.log(`Fetching portfolios for ${traders.length} traders...`);
@@ -157,39 +160,44 @@ export async function fetchAllPortfolios(traders, config, dataDir) {
     }
   }
 
-  // Scrape only stale profiles, in parallel (with the API fetches above).
-  console.log(`Scraping ${staleTraders.length} stale profile PnL entries (max age ${pnlMaxAgeMinutes}m, concurrency ${scrapeConcurrency})...`);
-  const scrapePromise = staleTraders.length > 0
-    ? batchScrapeProfilesParallel(staleTraders, scrapeConcurrency)
+  // Fetch all-time PnL for stale traders via the user-pnl API, in parallel
+  // with the position/value/usdc fetches above. (Replaces the old HTML profile
+  // scrape that broke on Polymarket's App Router migration.)
+  const stalePnlAddresses = staleTraders.map(t => t.address.toLowerCase());
+  console.log(`Fetching ${staleTraders.length} all-time PnL entries (stale > ${pnlMaxAgeMinutes}m, concurrency ${scrapeConcurrency})...`);
+  const pnlPromise = stalePnlAddresses.length > 0
+    ? batchFetch(stalePnlAddresses, fetchAllTimePnL, scrapeConcurrency, config)
     : Promise.resolve(new Map());
 
-  const [positionsResults, valuesResults, usdcResults, scrapedResults] = await Promise.all([
+  const [positionsResults, valuesResults, usdcResults, pnlResults] = await Promise.all([
     positionsPromise,
     valuesPromise,
     usdcPromise,
-    scrapePromise
+    pnlPromise
   ]);
 
   let failedPnl = 0;
   for (const trader of staleTraders) {
     const addr = trader.address.toLowerCase();
-    const pnlData = scrapedResults.get(addr);
-    if (pnlData) {
-      pnlMap.set(addr, pnlData);
-      pnlSourceMap.set(addr, 'scraped');
+    const result = pnlResults.get(addr);
+    if (result?.success && Number.isFinite(result.data)) {
+      pnlMap.set(addr, { pnl: result.data, amount: 0 });
+      pnlSourceMap.set(addr, 'api');
     } else {
+      // Null/failed: trader has no PnL series yet, or the call failed —
+      // the portfolio build falls back to unrealized PnL from positions.
       failedPnl++;
     }
   }
 
   const pnlStats = {
     cached: [...pnlSourceMap.values()].filter(s => s === 'cached').length,
-    scraped: [...pnlSourceMap.values()].filter(s => s === 'scraped').length,
+    fetched: [...pnlSourceMap.values()].filter(s => s === 'api').length,
     failed: failedPnl
   };
-  console.log(`PnL scrape: reused ${pnlStats.cached}, scraped ${pnlStats.scraped}, failed ${pnlStats.failed}`);
+  console.log(`All-time PnL: reused ${pnlStats.cached}, fetched ${pnlStats.fetched}, failed ${pnlStats.failed}`);
 
-  // Build trader portfolios with scraped PnL
+  // Build trader portfolios with all-time PnL
   for (const trader of traders) {
     const addr = trader.address.toLowerCase();
     const posResult = positionsResults.get(addr);

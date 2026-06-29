@@ -60,7 +60,7 @@ Each run uploads to R2:
 The frontend polls only the tiny `metadata.json`; when the snapshot id changes it fetches
 the big files once from the immutable snapshot URLs (browser-cached, no re-downloads).
 Readers can never observe a half-written update — the metadata pointer flips only after
-the full snapshot is uploaded. Previous-run state (recent-changes diffing, PnL scrape
+the full snapshot is uploaded. Previous-run state (recent-changes diffing, PnL
 cache) is downloaded from R2 at the start of each run.
 
 ## Secrets
