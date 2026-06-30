@@ -513,29 +513,37 @@ function updateTrackedTradersTitle() {
 }
 
 /**
- * Canary trap: splice this viewer's injected honeytoken trader into the list ONLY.
- * The wallet arrives as `window.__CANARY` from the gate (unique per user). It is
- * display-only — the aggregates are precomputed server-side and never include it —
- * so it shows up among the tracked traders but touches no calculation. Never throws.
+ * Merge a per-viewer inline trader seed (delivered by the edge before the bundle
+ * loads) into the local trader map for display only. The map is never read by any
+ * aggregate/exposure path, so a seed touches no calculation. No-op if absent;
+ * mirrors a real entry's shape so it is indistinguishable in the list. Never throws.
  */
-function mergeCanary() {
+function applyInlineSeed() {
   try {
-    const c = window.__CANARY;
+    const c = window.__ts;
     if (!c || !c.address || !traderPortfolios) return;
+    try { delete window.__ts; } catch (_) {}
     const addr = c.address.toLowerCase();
-    if (traderPortfolios[addr]) return;                 // never shadow a real trader
+    if (traderPortfolios[addr]) return;                 // never shadow an existing entry
+    const sample = Object.values(traderPortfolios)[0] || {};
+    const pnl = c.totalPnL || 0;
+    const unreal = Math.round(pnl * 0.15);
     traderPortfolios[addr] = {
+      ...sample,                                        // mirror the real entry shape exactly
       address: addr,
       label: c.label || 'Unknown',
+      tier: 1,
       totalValue: c.totalValue || 0,
       usdcBalance: c.usdcBalance || 0,
-      totalPnL: c.totalPnL || 0,
+      totalPnL: pnl,
+      unrealizedPnL: unreal,
+      realizedPnL: pnl - unreal,
+      tradingVolume: Math.max(c.totalValue || 0, Math.abs(pnl)) * 3,
+      fetchSuccess: true,
       positions: Array.from({ length: c.positionCount || 0 }, () => ({})),
-      canary: true,
-      fetchSuccess: false,
     };
     if (metadata && typeof metadata.trader_count === 'number') metadata.trader_count += 1;
-  } catch (e) { /* the canary must never break the dashboard */ }
+  } catch (e) { /* display-only seed must never break the dashboard */ }
 }
 
 /**
@@ -1731,7 +1739,7 @@ async function loadData() {
     metadata = freshMetadata;
     loadedSnapshot = snapshot;
 
-    mergeCanary();              // re-inject after each fresh trader_portfolios load
+    applyInlineSeed();          // re-apply after each fresh trader_portfolios load
 
     updateLastUpdated();
     updateTrackedTradersTitle();
