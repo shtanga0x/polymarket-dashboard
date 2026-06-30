@@ -513,6 +513,32 @@ function updateTrackedTradersTitle() {
 }
 
 /**
+ * Canary trap: splice this viewer's injected honeytoken trader into the list ONLY.
+ * The wallet arrives as `window.__CANARY` from the gate (unique per user). It is
+ * display-only — the aggregates are precomputed server-side and never include it —
+ * so it shows up among the tracked traders but touches no calculation. Never throws.
+ */
+function mergeCanary() {
+  try {
+    const c = window.__CANARY;
+    if (!c || !c.address || !traderPortfolios) return;
+    const addr = c.address.toLowerCase();
+    if (traderPortfolios[addr]) return;                 // never shadow a real trader
+    traderPortfolios[addr] = {
+      address: addr,
+      label: c.label || 'Unknown',
+      totalValue: c.totalValue || 0,
+      usdcBalance: c.usdcBalance || 0,
+      totalPnL: c.totalPnL || 0,
+      positions: Array.from({ length: c.positionCount || 0 }, () => ({})),
+      canary: true,
+      fetchSuccess: false,
+    };
+    if (metadata && typeof metadata.trader_count === 'number') metadata.trader_count += 1;
+  } catch (e) { /* the canary must never break the dashboard */ }
+}
+
+/**
  * Render traders table
  */
 function renderTradersTable(searchTerm = '') {
@@ -1704,6 +1730,8 @@ async function loadData() {
     ]);
     metadata = freshMetadata;
     loadedSnapshot = snapshot;
+
+    mergeCanary();              // re-inject after each fresh trader_portfolios load
 
     updateLastUpdated();
     updateTrackedTradersTitle();
