@@ -41,7 +41,9 @@ jobs:
           path: _traders
 
       - name: Stage trader list into data/
-        run: cp _traders/traders.csv data/traders.csv
+        run: |
+          mkdir -p data
+          cp _traders/traders.csv data/traders.csv
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
