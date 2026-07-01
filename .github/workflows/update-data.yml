@@ -30,6 +30,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Checkout private trader list
+        # The trader list lives in the private repo shtanga0x/polymarket-traders
+        # (kept out of this public repo). Pulled via a read-only deploy key
+        # (secret TRADERS_DEPLOY_KEY); public repo => Actions minutes stay free.
+        uses: actions/checkout@v4
+        with:
+          repository: shtanga0x/polymarket-traders
+          ssh-key: ${{ secrets.TRADERS_DEPLOY_KEY }}
+          path: _traders
+
+      - name: Stage trader list into data/
+        run: cp _traders/traders.csv data/traders.csv
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:

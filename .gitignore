@@ -5,3 +5,5 @@ worker/.wrangler/
 .wrangler/
 site/assets/site-config.js
 .DS_Store
+data/traders.csv
+_traders/
