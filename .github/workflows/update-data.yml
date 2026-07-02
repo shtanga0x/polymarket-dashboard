@@ -7,14 +7,19 @@ on:
     types: [manual-refresh]
   workflow_dispatch:
 
-concurrency:
-  group: update-polymarket-data
-  cancel-in-progress: false
-
 jobs:
   update-data:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Per-SITE concurrency so a slow/hung watch fetch never blocks core (they used to
+    # share one group → a 10-min watch hang froze the whole board). Each site now
+    # queues independently.
+    concurrency:
+      group: update-data-${{ matrix.site }}
+      cancel-in-progress: false
+    # With proxies a healthy fetch finishes in 1-3 min; 6 catches a hang far sooner
+    # than the old 10 while leaving margin. Tighten toward 5 once proxied runs are
+    # confirmed fast.
+    timeout-minutes: 6
     strategy:
       fail-fast: false
       matrix:
