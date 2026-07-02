@@ -7,12 +7,15 @@
   "r2_site_bucket": "s3://polymarket-watch",
   "analytics_token": "642f4c720224469aa172bcc3457b7938",
   "traders_csv": "data/traders.csv",
-  "include_tiers": [1, 2],
+  "include_tiers": [
+    1,
+    2
+  ],
   "traders_column_label": "Traders",
   "github_url": "https://github.com/shtanga0x/polymarket-dashboard",
   "polymarket_referral": "delta",
   "poll_interval_seconds": 120,
-  "concurrency_limit": 8,
+  "concurrency_limit": 16,
   "max_recent_events": 20000,
   "min_usd_filter": 50,
   "retry_attempts": 3,
@@ -20,7 +23,7 @@
   "activity_limit_per_trader": 1000,
   "positions_limit_per_trader": 1000,
   "scrape_pnl_interval_minutes": 60,
-  "scrape_concurrency": 4,
+  "scrape_concurrency": 8,
   "inactivity_timeout_minutes": 30,
   "auto_reload_seconds": 30
 }
