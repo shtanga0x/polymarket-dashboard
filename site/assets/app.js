@@ -28,7 +28,9 @@ const REFERRAL = `?via=${SITE.polymarketReferral}`;
 const INACTIVITY_TIMEOUT = SITE.inactivityTimeoutMinutes * 60_000;
 // Poll static JSON files more often than the data producer runs, so fresh
 // data appears quickly after a scheduled refresh lands in R2.
-const AUTO_RELOAD_INTERVAL = SITE.autoReloadSeconds * 1000;
+// Mutable: the server can raise this via the X-Shtanga-Reload header on metadata.json
+// (the control bot throttles 30s→60s when Workers requests near the daily cap).
+let AUTO_RELOAD_INTERVAL = SITE.autoReloadSeconds * 1000;
 const BALANCED_SHARE_DIFF_THRESHOLD = 0.10;
 
 // Live market-price overlay. Between full data snapshots the browser polls
@@ -358,12 +360,15 @@ function polymarketUrl(path) {
  * The ticker is created only once, no matter how often this is called.
  */
 function startAutoReload() {
-  if (autoReloadTimer) clearInterval(autoReloadTimer);
-  autoReloadTimer = setInterval(async () => {
-    // Pause if user has been inactive longer than INACTIVITY_TIMEOUT
-    if (Date.now() - lastActivityTime > INACTIVITY_TIMEOUT) return;
-    await loadData();
-  }, AUTO_RELOAD_INTERVAL);
+  if (autoReloadTimer) clearTimeout(autoReloadTimer);
+  // Self-rescheduling so a changed AUTO_RELOAD_INTERVAL (from the server throttle
+  // hint) takes effect on the next tick without recreating the timer.
+  const tick = async () => {
+    // Pause loads while the user has been inactive, but keep the timer alive.
+    if (Date.now() - lastActivityTime <= INACTIVITY_TIMEOUT) await loadData();
+    autoReloadTimer = setTimeout(tick, AUTO_RELOAD_INTERVAL);
+  };
+  autoReloadTimer = setTimeout(tick, AUTO_RELOAD_INTERVAL);
 
   if (!lastUpdatedTicker) {
     lastUpdatedTicker = setInterval(updateLastUpdated, 30_000);
@@ -1722,6 +1727,12 @@ async function loadData() {
     const metaResponse = await fetch(`${DATA_BASE}/metadata.json`, { cache: 'no-cache', credentials: 'include' });
     if (!metaResponse.ok) {
       throw new Error('Failed to fetch metadata.json');
+    }
+    // Server-driven reload cadence: the control bot raises this to 60s when Workers
+    // requests approach the daily cap. Next auto-reload tick picks up the new value.
+    const hintedReload = parseInt(metaResponse.headers.get('X-Shtanga-Reload'), 10);
+    if (hintedReload >= 5 && hintedReload * 1000 !== AUTO_RELOAD_INTERVAL) {
+      AUTO_RELOAD_INTERVAL = hintedReload * 1000;
     }
     const freshMetadata = await metaResponse.json();
     const snapshot = freshMetadata.snapshot ?? null;
