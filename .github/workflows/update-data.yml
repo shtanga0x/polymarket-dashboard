@@ -74,6 +74,13 @@ jobs:
           # Set via: gh secret set PROXIES < proxies.txt
           PROXIES: ${{ secrets.PROXIES }}
 
+      - name: Build watermark index
+        # Emits wm_offsets.json (byte offsets → the Worker's streaming per-viewer
+        # decimal watermark) and wm_marks.json (their {address,field} identities →
+        # the offline leak tracer). Non-fatal: if it fails, the Worker just skips
+        # watermarking (canary injection still works).
+        run: node scripts/wm_index.js --site "$SITE" || echo "wm_index skipped"
+
       - name: Upload data to R2 (atomic snapshot, then pointer flip)
         run: |
           set -euo pipefail

@@ -150,7 +150,9 @@ function applySiteChrome() {
  */
 async function fetchSnapshotJSON(filename, snapshot) {
   const url = snapshot ? `${DATA_BASE}/${snapshot}/${filename}` : `${DATA_BASE}/${filename}`;
-  const response = await fetch(url, snapshot ? undefined : { cache: 'no-cache' });
+  // credentials:'include' so the shtanga_access cookie rides the cross-subdomain
+  // (core/watch → data) request now that the data host is gated.
+  const response = await fetch(url, { credentials: 'include', ...(snapshot ? {} : { cache: 'no-cache' }) });
   if (!response.ok) {
     throw new Error(`Failed to fetch ${filename}`);
   }
@@ -1641,7 +1643,7 @@ async function triggerUpdate() {
         elapsed += 5;
         btn.textContent = `Updating… ${elapsed}s`;
         try {
-          const fresh = await fetch(`${DATA_BASE}/metadata.json`, { cache: 'no-cache' });
+          const fresh = await fetch(`${DATA_BASE}/metadata.json`, { cache: 'no-cache', credentials: 'include' });
           const meta = await fresh.json();
           if (meta.last_updated !== knownTimestamp) {
             clearInterval(updatePollTimer);
@@ -1717,7 +1719,7 @@ async function loadData() {
   isLoading = true;
 
   try {
-    const metaResponse = await fetch(`${DATA_BASE}/metadata.json`, { cache: 'no-cache' });
+    const metaResponse = await fetch(`${DATA_BASE}/metadata.json`, { cache: 'no-cache', credentials: 'include' });
     if (!metaResponse.ok) {
       throw new Error('Failed to fetch metadata.json');
     }
