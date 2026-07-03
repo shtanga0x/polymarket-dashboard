@@ -3,7 +3,9 @@ main = "index.js"
 compatibility_date = "2024-01-01"
 
 [triggers]
-crons = ["* * * * *"]
+# Every 2 min — matches the workflow's designed cadence. At 1-min the runs queued
+# behind the per-site concurrency group (mass-cancel emails) and doubled proxy load.
+crons = ["*/2 * * * *"]
 
 # Secrets (set with: wrangler secret put GITHUB_PAT)
 # GITHUB_PAT: fine-grained PAT with Actions: write on shtanga0x/polymarket-dashboard

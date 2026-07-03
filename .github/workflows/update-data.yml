@@ -71,6 +71,13 @@ jobs:
           done
 
       - name: Fetch Polymarket data
+        # continue-on-error: a total fetch failure (all proxies down for one cycle)
+        # must not fail the run — the next cycle lands in ~2 min and readers keep
+        # the previous complete snapshot. Downstream steps are gated on the
+        # outcome, so nothing empty is ever uploaded. Sustained outages surface
+        # as a stale "last updated" on the board, not as an email per cycle.
+        id: fetch
+        continue-on-error: true
         run: node scripts/fetch_data.js --site "$SITE"
         env:
           NODE_OPTIONS: '--max-old-space-size=1024'
@@ -84,9 +91,11 @@ jobs:
         # decimal watermark) and wm_marks.json (their {address,field} identities →
         # the offline leak tracer). Non-fatal: if it fails, the Worker just skips
         # watermarking (canary injection still works).
+        if: steps.fetch.outcome == 'success'
         run: node scripts/wm_index.js --site "$SITE" || echo "wm_index skipped"
 
       - name: Upload data to R2 (atomic snapshot, then pointer flip)
+        if: steps.fetch.outcome == 'success'
         run: |
           set -euo pipefail
           SRC="out/$SITE/data"
@@ -119,6 +128,7 @@ jobs:
             --cache-control "public, max-age=15"
 
       - name: Prune old snapshots (keep newest 5)
+        if: steps.fetch.outcome == 'success'
         run: |
           set -euo pipefail
           aws s3 ls "s3://polymarket-data/$SITE/snap/" --endpoint-url "$R2_ENDPOINT" \
