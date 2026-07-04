@@ -3,9 +3,12 @@ main = "index.js"
 compatibility_date = "2024-01-01"
 
 [triggers]
-# Every 2 min — matches the workflow's designed cadence. At 1-min the runs queued
-# behind the per-site concurrency group (mass-cancel emails) and doubled proxy load.
-crons = ["*/2 * * * *"]
+# Every minute, ADAPTIVE (2026-07-03): the scheduled handler first checks GitHub
+# for a queued/in-progress update-data run and skips the tick if one exists, so
+# the old 1-min failure mode (runs queueing behind the per-site concurrency
+# group → mass-cancel emails) can't recur. Slow proxy spells self-throttle back
+# to the old effective cadence.
+crons = ["* * * * *"]
 
 # Secrets (set with: wrangler secret put GITHUB_PAT)
 # GITHUB_PAT: fine-grained PAT with Actions: write on shtanga0x/polymarket-dashboard
