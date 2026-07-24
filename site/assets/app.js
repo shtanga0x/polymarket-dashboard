@@ -1938,7 +1938,7 @@ async function fetchUsdcBalance(address) {
  * Fetch positions for a wallet from Polymarket API (null-safe: always an array)
  */
 async function fetchCheckerPositions(address) {
-  const url = `${DATA_API_BASE}/positions?user=${address.toLowerCase()}&limit=1000`;
+  const url = `${DATA_API_BASE}/positions?user=${address.toLowerCase()}&limit=500`;
   const response = await fetch(url);
   if (!response.ok) throw new Error('Failed to fetch positions');
   return (await response.json()) || [];

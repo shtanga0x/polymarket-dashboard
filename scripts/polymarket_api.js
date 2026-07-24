@@ -111,11 +111,11 @@ async function fetchWithRetry(url, options = {}, config = {}) {
 /**
  * Fetch current positions for a wallet
  * @param {string} address - Wallet address (0x...)
- * @param {number} limit - Max results (default 1000)
+ * @param {number} limit - Max results (default 500 — data-api rejects >500 with HTTP 400)
  * @param {object} config - Config object
  * @returns {Promise<Array>} Array of position objects
  */
-export async function fetchWalletPositions(address, limit = 1000, config = {}) {
+export async function fetchWalletPositions(address, limit = 500, config = {}) {
   const url = `${DATA_API_BASE}/positions?user=${address.toLowerCase()}&limit=${limit}`;
   const data = await fetchWithRetry(url, {}, config);
   return data || [];
@@ -294,7 +294,7 @@ export async function fetchAllActivity(address, config = {}) {
   const maxIterations = config.activity_max_pages || 30;
 
   for (let i = 0; i < maxIterations; i++) {
-    const url = `${DATA_API_BASE}/activity?user=${address.toLowerCase()}&limit=1000&end=${endTimestamp}`;
+    const url = `${DATA_API_BASE}/activity?user=${address.toLowerCase()}&limit=500&end=${endTimestamp}`;
 
     try {
       const data = await fetchWithRetry(url, {}, config);
@@ -311,7 +311,7 @@ export async function fetchAllActivity(address, config = {}) {
 
       endTimestamp = oldest - 1;
 
-      if (data.length < 1000) break; // Last page
+      if (data.length < 500) break; // Last page
     } catch (error) {
       console.warn(`Failed to fetch activity page ${i + 1}: ${error.message}`);
       break;
