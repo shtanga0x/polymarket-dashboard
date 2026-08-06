@@ -113,6 +113,12 @@ header h1 {
   animation: pulse 2s infinite;
 }
 
+/* Data host unreachable — refresh can't help, button stays disabled. */
+.status-dot.off {
+  background: #f85149;
+  animation: none;
+}
+
 @keyframes pulse {
   0% { box-shadow: 0 0 0 0 var(--status-pulse-color); }
   70% { box-shadow: 0 0 0 6px rgba(63, 185, 80, 0); }

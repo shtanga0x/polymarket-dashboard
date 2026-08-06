@@ -42,7 +42,8 @@ const LIVE_PRICE_INTERVAL = 15_000;
 const LIVE_PRICE_BATCH = 100;
 
 // Cloudflare Worker that dispatches a manual data refresh via GitHub Actions.
-const WORKER_URL = 'https://pmw-trigger.bobrovnikovstepan.workers.dev';
+// Manual refresh goes through the member-gated same-origin /api/refresh
+// (site-router → pm-refresh runner); pmw-trigger is cron-only now.
 
 // Per-site key so the two dashboards don't fight over the saved theme.
 const THEME_STORAGE_KEY = `${SITE.siteId}-theme`;
@@ -55,6 +56,7 @@ let recentChanges = null;
 let lastActivityTime = Date.now();
 let autoReloadTimer = null;
 let lastUpdatedTicker = null;
+let dataOffline = false;    // metadata.json fetch failing → status 'off', button disarmed
 let updatePollTimer = null;
 let livePriceTimer = null;
 
@@ -486,14 +488,39 @@ function startLivePrices() {
 /**
  * Update last updated display
  */
+// Normal cadence is 1-2 min; past this the pipeline is presumed stuck and the
+// manual "Update data" button arms. The server refuses refreshes younger than
+// 2 min regardless, so this only governs when the button LOOKS available.
+const STALE_AFTER_MINUTES = 5;
+
 function updateLastUpdated() {
   const el = document.getElementById('last-updated');
   const timestampEl = el?.querySelector('.timestamp');
   const statusDot = el?.querySelector('.status-dot');
+  const btn = document.getElementById('update-btn');
+
+  // status: 'on' (fresh) | 'stale' (old data → button armed) | 'off' (data host down)
+  const setStatus = (state) => {
+    statusDot?.classList.remove('stale', 'off');
+    if (state !== 'on') statusDot?.classList.add(state);
+    if (btn && !btn.dataset.busy) {
+      btn.disabled = state !== 'stale';
+      btn.title =
+        state === 'stale' ? 'Data is stale — trigger a manual update' :
+        state === 'off'   ? 'Data host unreachable' :
+                            'Data is fresh — updates run automatically';
+    }
+  };
+
+  if (dataOffline) {
+    if (timestampEl) timestampEl.textContent = 'Data unreachable';
+    setStatus('off');
+    return;
+  }
 
   if (!metadata?.last_updated) {
     if (timestampEl) timestampEl.textContent = 'No data';
-    statusDot?.classList.add('stale');
+    setStatus('stale');
     return;
   }
 
@@ -504,11 +531,7 @@ function updateLastUpdated() {
     timestampEl.textContent = `Updated ${formatRelativeTime(updated.getTime() / 1000)}`;
   }
 
-  if (diffMinutes > 30) {
-    statusDot?.classList.add('stale');
-  } else {
-    statusDot?.classList.remove('stale');
-  }
+  setStatus(diffMinutes > STALE_AFTER_MINUTES ? 'stale' : 'on');
 }
 
 function updateTrackedTradersTitle() {
@@ -1620,29 +1643,42 @@ function initRefresh() {
 // ============================================================
 
 /**
- * Ask the pmw-trigger worker to dispatch a fresh data run, then poll
- * metadata.json until last_updated changes and reload the dashboard.
- * The worker rate-limits manual triggers, so the button surfaces the
- * cooldown when one is active.
+ * POST /api/refresh (same origin, member-gated by the site-router) to run the
+ * local rescue pipeline, then poll metadata.json until last_updated changes and
+ * reload. The server refuses while data is younger than 2 min (429 too_fresh)
+ * and reports an already-running pipeline as 409 — both are surfaced, not errors.
  */
 async function triggerUpdate() {
   const btn = document.getElementById('update-btn');
   if (!btn || btn.disabled) return;
 
   btn.disabled = true;
-  btn.textContent = 'Triggering...';
+  btn.dataset.busy = '1';
+  btn.textContent = 'Requesting…';
   btn.className = 'update-btn';
 
-  try {
-    const res = await fetch(`${WORKER_URL}/trigger-update?repo=polymarket`, { method: 'POST' });
-    const data = await res.json();
+  // Show `label` briefly, then hand the button back to updateLastUpdated().
+  const settle = (label, cls = 'update-btn') => {
+    btn.textContent = label;
+    btn.className = cls;
+    setTimeout(() => {
+      delete btn.dataset.busy;
+      btn.textContent = 'Update data';
+      btn.className = 'update-btn';
+      updateLastUpdated();
+    }, 4000);
+  };
 
-    if (data.status === 'triggered') {
-      // Poll metadata.json every 5s until last_updated changes, then reload
+  try {
+    const res = await fetch('/api/refresh', { method: 'POST', credentials: 'include' });
+    const data = await res.json().catch(() => ({}));
+
+    if (res.status === 202 || res.status === 409) {
+      // Pipeline running (ours or someone else's) — poll for the pointer flip.
       const knownTimestamp = metadata?.last_updated || null;
       let elapsed = 0;
       btn.className = 'update-btn triggered';
-      btn.textContent = 'Updating…';
+      btn.textContent = res.status === 409 ? 'Already updating…' : 'Updating…';
 
       updatePollTimer = setInterval(async () => {
         elapsed += 5;
@@ -1653,49 +1689,38 @@ async function triggerUpdate() {
           if (meta.last_updated !== knownTimestamp) {
             clearInterval(updatePollTimer);
             await loadData();
-            btn.textContent = 'Updated!';
-            btn.className = 'update-btn triggered';
-            setTimeout(() => {
-              btn.textContent = 'Update DB';
-              btn.disabled = false;
-              btn.className = 'update-btn';
-            }, 3000);
+            settle('Updated!', 'update-btn triggered');
+            return;
           }
         } catch (_) { /* ignore fetch errors during poll */ }
 
-        // Timeout after 3 minutes
-        if (elapsed >= 180) {
+        // Full both-site pipeline takes ~4-5 min; give it 6.
+        if (elapsed >= 360) {
           clearInterval(updatePollTimer);
-          btn.textContent = 'Update DB';
-          btn.disabled = false;
-          btn.className = 'update-btn';
+          settle('Timed out — check later');
         }
       }, 5000);
 
-    } else if (data.status === 'rate_limited') {
-      let secs = data.cooldown_remaining_sec || 300;
-      btn.className = 'update-btn';
-      btn.textContent = `Wait ${secs}s`;
+    } else if (res.status === 429) {
+      let secs = data.retry_after_sec || 120;
+      btn.textContent = `Fresh — wait ${secs}s`;
       const t = setInterval(() => {
         secs--;
-        btn.textContent = `Wait ${secs}s`;
+        btn.textContent = `Fresh — wait ${secs}s`;
         if (secs <= 0) {
           clearInterval(t);
-          btn.textContent = 'Update DB';
-          btn.disabled = false;
+          settle('Update data');
         }
       }, 1000);
 
+    } else if (res.status === 503) {
+      settle(data.status === 'runner_unreachable' ? 'Updater offline' : 'Unavailable');
     } else {
-      btn.textContent = 'Error — retry?';
-      btn.disabled = false;
-      setTimeout(() => { btn.textContent = 'Update DB'; btn.className = 'update-btn'; }, 4000);
+      settle('Error — retry later');
     }
   } catch (err) {
     console.error('triggerUpdate error:', err);
-    btn.textContent = 'Network error';
-    btn.disabled = false;
-    setTimeout(() => { btn.textContent = 'Update DB'; btn.className = 'update-btn'; }, 4000);
+    settle('Network error');
   }
 }
 
@@ -1735,6 +1760,7 @@ async function loadData() {
       AUTO_RELOAD_INTERVAL = hintedReload * 1000;
     }
     const freshMetadata = await metaResponse.json();
+    dataOffline = false;
     const snapshot = freshMetadata.snapshot ?? null;
 
     // Same snapshot as the one on screen — data unchanged, skip the big files.
@@ -1762,6 +1788,8 @@ async function loadData() {
     renderChangesTable();
   } catch (error) {
     console.error('Failed to load data:', error);
+    dataOffline = true;
+    updateLastUpdated();
     document.getElementById('traders-tbody').innerHTML =
       '<tr><td colspan="7" class="loading">Failed to load data. Run the fetch script first.</td></tr>';
   } finally {
