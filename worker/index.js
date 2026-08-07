@@ -25,12 +25,19 @@ const COOLDOWN_MS = 60 * 1000; // 1 minute, for manual triggers
 
 const REPO = 'shtanga0x/polymarket-dashboard';
 
+// A run stuck in "queued" longer than this is a zombie (2026-08-07: a run sat
+// queued 20+ min after the Actions outage and even force-cancel 500'd; skipping
+// ticks for it starved the boards). Dispatching anyway is also what CLEARS it:
+// the per-site concurrency group holds one pending job, so the new run's jobs
+// displace the zombie's and GitHub finally marks it cancelled.
+const QUEUED_ZOMBIE_MS = 10 * 60 * 1000;
+
 // True if an update-data run is already queued or executing. On a GitHub API
 // blip, report NOT busy — dispatching anyway is the old (safe) behaviour.
 async function updateRunActive(env) {
   for (const status of ['queued', 'in_progress']) {
     const r = await fetch(
-      `https://api.github.com/repos/${REPO}/actions/workflows/update-data.yml/runs?status=${status}&per_page=1`,
+      `https://api.github.com/repos/${REPO}/actions/workflows/update-data.yml/runs?status=${status}&per_page=5`,
       {
         headers: {
           'Authorization': `Bearer ${env.GITHUB_PAT}`,
@@ -41,7 +48,14 @@ async function updateRunActive(env) {
     );
     if (!r.ok) { console.warn('run-status check failed:', r.status); return false; }
     const j = await r.json();
-    if ((j.total_count ?? 0) > 0) return true;
+    for (const run of j.workflow_runs ?? []) {
+      const age = Date.now() - Date.parse(run.created_at);
+      if (status === 'queued' && age > QUEUED_ZOMBIE_MS) {
+        console.log(`ignoring zombie queued run ${run.id} (${Math.round(age / 60000)} min)`);
+        continue;
+      }
+      return true;
+    }
   }
   return false;
 }
