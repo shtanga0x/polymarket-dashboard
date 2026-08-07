@@ -964,8 +964,14 @@ function renderOutcomeRow(outcome, totalExposure, isFirst, rowSpanCount, marketI
     `;
   }
 
+  // Bot-alert rank badge: only within the bot's tracked window (top-200) —
+  // alert chains never reference deeper ranks, and it keeps the tail clean.
+  const rankBadge = outcome._botRank && outcome._botRank <= 200
+    ? ` <span class="outcome-rank" title="Position rank by exposure — the #N used in bot alerts">#${outcome._botRank}</span>`
+    : '';
+
   rowHtml += `
-    <td><span class="${outcomeClass}">${outcome.outcome || '-'}</span></td>
+    <td><span class="${outcomeClass}">${outcome.outcome || '-'}</span>${rankBadge}</td>
     ${isFirst ? `<td ${rowSpanCount > 1 ? `rowspan="${rowSpanCount}"` : ''} class="expiration-date">${formatExpirationDate(marketInfo.endDate)}</td>` : ''}
     <td>${entryHtml}</td>
     <td>${traderCountHtml}</td>
@@ -1775,6 +1781,11 @@ async function loadData() {
       fetchSnapshotJSON('aggregated_portfolio.json', snapshot),
       fetchSnapshotJSON('recent_changes.json', snapshot)
     ]);
+    // Per-outcome exposure rank — the same numbering the Telegram alert bot
+    // uses (position's index in the exposure-sorted array). Stamped on the full
+    // array before any filtering/grouping so the on-screen badge always matches
+    // the "#N" in alert messages regardless of active filters or sort.
+    (aggregatedPortfolio?.positions || []).forEach((p, i) => { p._botRank = i + 1; });
     metadata = freshMetadata;
     loadedSnapshot = snapshot;
 

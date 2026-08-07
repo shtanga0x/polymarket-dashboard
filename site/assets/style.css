@@ -1168,3 +1168,10 @@ td[rowspan] {
   font-size: 0.8em;
   white-space: nowrap;
 }
+
+/* Per-outcome exposure rank in the Outcome column — same #N as bot alerts */
+.outcome-rank {
+  font-size: 0.8em;
+  opacity: 0.55;
+  white-space: nowrap;
+}
