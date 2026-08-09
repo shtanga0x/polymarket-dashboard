@@ -224,6 +224,10 @@
             <div class="card-label">All Time PnL</div>
             <div class="card-value" id="checker-pnl">$0</div>
           </div>
+          <div class="card">
+            <div class="card-label">Open Positions</div>
+            <div class="card-value" id="checker-positions-count">0</div>
+          </div>
         </div>
 
         <h3 class="checker-subtitle">Position Comparison with Model Portfolio</h3>
@@ -231,6 +235,7 @@
           <table id="checker-table">
             <thead>
               <tr>
+                <th>#</th>
                 <th>Market</th>
                 <th>Side</th>
                 <th>Your Exposure</th>
@@ -240,10 +245,16 @@
                 <th class="tooltip-header">1h Change<span class="header-info">last hour</span></th>
                 <th class="tooltip-header">24h Change<span class="header-info">1h&ndash;24h ago</span></th>
                 <th class="tooltip-header">1w Change<span class="header-info">1&ndash;7 days ago</span></th>
+                <th class="recent-changes-col"><span class="recent-changes-th" title="Recent changes">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M2.1 12s3.6-6.6 9.9-6.6S21.9 12 21.9 12 18.3 18.6 12 18.6 2.1 12 2.1 12Z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                </span></th>
               </tr>
             </thead>
             <tbody id="checker-tbody">
-              <tr><td colspan="9" class="loading">Enter an address to check</td></tr>
+              <tr><td colspan="11" class="loading">Enter an address to check</td></tr>
             </tbody>
           </table>
         </div>

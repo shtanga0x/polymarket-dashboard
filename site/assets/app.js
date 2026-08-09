@@ -2156,11 +2156,11 @@ async function runChecker(address) {
   const tbody = document.getElementById('checker-tbody');
 
   if (!address || !address.startsWith('0x') || address.length !== 42) {
-    tbody.innerHTML = '<tr><td colspan="9" class="loading">Please enter a valid Ethereum address (0x...)</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" class="loading">Please enter a valid Ethereum address (0x...)</td></tr>';
     return;
   }
 
-  tbody.innerHTML = '<tr><td colspan="9" class="loading">Loading portfolio data...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="11" class="loading">Loading portfolio data...</td></tr>';
   resultsDiv.style.display = 'block';
 
   try {
@@ -2203,13 +2203,33 @@ async function runChecker(address) {
       pnlEl.className = 'card-value';
     }
 
+    document.getElementById('checker-positions-count').textContent = positions.length;
+
     if (positions.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="9" class="loading">No positions found for this address</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="11" class="loading">No positions found for this address</td></tr>';
       return;
     }
 
+    // Rank markets by this wallet's size, mirroring the main Portfolio's #
+    // column: one number per market (Yes+No exposures summed), largest first.
+    // Rows render in that order so both outcome rows of a market sit together.
+    const marketExposure = new Map();
+    for (const pos of positions) {
+      const exp = Math.abs(parseFloat(pos.currentValue || 0));
+      marketExposure.set(pos.conditionId, (marketExposure.get(pos.conditionId) || 0) + exp);
+    }
+    const marketRank = new Map();
+    [...marketExposure.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .forEach(([conditionId], i) => marketRank.set(conditionId, i + 1));
+    const sortedPositions = [...positions].sort((a, b) => {
+      const rankDiff = marketRank.get(a.conditionId) - marketRank.get(b.conditionId);
+      if (rankDiff !== 0) return rankDiff;
+      return Math.abs(parseFloat(b.currentValue || 0)) - Math.abs(parseFloat(a.currentValue || 0));
+    });
+
     // Build positions table
-    const rows = positions.map(pos => {
+    const rows = sortedPositions.map(pos => {
       const exposure = Math.abs(parseFloat(pos.currentValue || 0));
       const userPct = totalCapital > 0 ? (exposure / totalCapital) * 100 : 0;
 
@@ -2247,12 +2267,19 @@ async function runChecker(address) {
 
       const outcomeClass = pos.outcome === 'Yes' ? 'outcome-yes' : 'outcome-no';
 
+      // Model-portfolio rank badge — the same "#N" shown next to Yes/No in the
+      // main Portfolio table and used by bot alerts.
+      const modelRankBadge = modelPos?._botRank && modelPos._botRank <= 200
+        ? ` <span class="outcome-rank" title="This outcome's rank in the model portfolio — the #N used in bot alerts">#${modelPos._botRank}</span>`
+        : '';
+
       return `
         <tr>
+          <td class="market-index">${marketRank.get(pos.conditionId) || '-'}</td>
           <td>
             <a href="${marketUrl}" target="_blank" class="market-link">${pos.title || 'Unknown Market'}</a>
           </td>
-          <td><span class="${outcomeClass}">${pos.outcome || '-'}</span></td>
+          <td><span class="${outcomeClass}">${pos.outcome || '-'}</span>${modelRankBadge}</td>
           <td>${formatExposureWithShares(exposure, pos.size)}</td>
           <td>${userPct.toFixed(2)}%</td>
           <td>${modelPct > 0 ? modelPct.toFixed(2) + '%' : '-'}</td>
@@ -2269,6 +2296,9 @@ async function runChecker(address) {
             ${w1Sign}${formatUSD(changes.w1)}
             ${changes.w1Details.length > 0 ? `<span class="tooltip-text">${buildChangeTooltip(changes.w1Details)}</span>` : ''}
           </td>
+          <td class="recent-changes-cell">
+            ${pos.conditionId ? `<button type="button" class="event-link-btn" onclick="showEventChanges('${pos.conditionId}')" title="Show every trader buying or selling this market in Recent Changes" aria-label="Show recent changes for this market">↗</button>` : ''}
+          </td>
         </tr>
       `;
     });
@@ -2277,7 +2307,7 @@ async function runChecker(address) {
 
   } catch (error) {
     console.error('Checker error:', error);
-    tbody.innerHTML = `<tr><td colspan="9" class="loading">Error: ${error.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11" class="loading">Error: ${error.message}</td></tr>`;
   }
 }
 
