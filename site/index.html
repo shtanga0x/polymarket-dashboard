@@ -199,6 +199,28 @@
     <section id="checker-section" class="section">
       <div class="section-header">
         <h2>Portfolio Checker</h2>
+        <div class="portfolio-actions">
+          <span class="filter-tooltip" data-tooltip="Show only events where an outcome's current odds fall in the selected range (0&ndash;Xc). Both YES and NO sides stay visible for every matching event.">
+            <select id="checker-odds-filter" class="odds-filter" aria-label="Filter events by odds range">
+              <option value="0.10">0&ndash;10c</option>
+              <option value="0.20">0&ndash;20c</option>
+              <option value="0.30">0&ndash;30c</option>
+              <option value="0.40">0&ndash;40c</option>
+              <option value="0.50">0&ndash;50c</option>
+              <option value="0.60">0&ndash;60c</option>
+              <option value="0.70">0&ndash;70c</option>
+              <option value="0.80">0&ndash;80c</option>
+              <option value="0.90">0&ndash;90c</option>
+              <option value="1.00" selected>0&ndash;100c</option>
+            </select>
+          </span>
+          <span class="filter-tooltip" data-tooltip="Hide near-balanced YES/NO positions (<10% share gap).">
+            <button id="checker-balanced-filter-btn" class="icon-toggle-btn" type="button" aria-pressed="false" aria-label="Hide near-balanced positions"></button>
+          </span>
+          <span class="filter-tooltip" data-tooltip="Stack markets from the same event into one section; events ranked by their biggest single market.">
+            <button id="checker-stack-events-btn" class="icon-toggle-btn" type="button" aria-pressed="false" aria-label="Stack markets by event"></button>
+          </span>
+        </div>
       </div>
 
       <div class="checker-input-container">
@@ -238,10 +260,10 @@
                 <th>#</th>
                 <th>Market</th>
                 <th>Side</th>
-                <th>Your Exposure</th>
-                <th>Your %</th>
-                <th>Model %</th>
-                <th id="traders-column-label">Traders</th>
+                <th class="tooltip-header" title="Current market value of this wallet's position: shares &times; current price. Not cost basis &mdash; it moves with the market.">Your Exposure<span class="header-info">shares &times; price</span></th>
+                <th class="tooltip-header" title="This position's share of the wallet's total capital (open positions + USDC balance).">Your %</th>
+                <th class="tooltip-header" title="This outcome's share of the model portfolio's total exposure.">Model %</th>
+                <th id="traders-column-label" class="tooltip-header" title="Tracked traders currently holding this outcome in the model portfolio.">Traders</th>
                 <th class="tooltip-header">1h Change<span class="header-info">last hour</span></th>
                 <th class="tooltip-header">24h Change<span class="header-info">1h&ndash;24h ago</span></th>
                 <th class="tooltip-header">1w Change<span class="header-info">1&ndash;7 days ago</span></th>
@@ -292,8 +314,17 @@
             adds and trims, newest first. The <em>eye</em> icon in the Portfolio's last column filters
             this feed to one market — that's the fastest way to answer "who just moved here?".</li>
           <li><strong>Checker</strong> — paste <em>any</em> wallet address to inspect its current
-            positions, exposure and all-time PnL. Works for wallets outside the tracked list too —
-            use it to vet a trader before suggesting them for the watchlist.</li>
+            positions, exposure, open-position count and all-time PnL. Works for wallets outside the
+            tracked list too — use it to vet a trader before suggesting them for the watchlist.
+            The <em>#</em> column ranks the wallet's markets by size (YES+NO combined, one number per
+            market); the badge next to the side (e.g. <em>Yes&nbsp;#170</em>) is that outcome's rank in
+            the <em>model</em> portfolio — the same #N the alert bot uses. <em>Your Exposure</em> is
+            the position's current market value (shares &times; current price), not cost basis.
+            <em>Model&nbsp;%</em> and <em>Traders</em> show how the tracked cohort holds the same
+            outcome, and the momentum columns are the tracked traders' flows in the same chained
+            windows as the Portfolio — so you can compare the wallet's book against the model side by
+            side. The odds-range, balanced-pairs and event-stack controls work exactly like the
+            Portfolio's, and the <em>eye</em> column jumps to Recent Changes for that market.</li>
         </ul>
 
         <h3>What to pay attention to</h3>

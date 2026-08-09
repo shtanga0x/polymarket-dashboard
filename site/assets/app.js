@@ -191,7 +191,12 @@ function formatShares(value) {
 
 function getPositionShares(position) {
   if (Number.isFinite(position?.totalSize)) return Math.abs(position.totalSize);
-  return (position?.traders || []).reduce((sum, trader) => sum + Math.abs(parseFloat(trader.size || 0)), 0);
+  if (position?.traders?.length) {
+    return position.traders.reduce((sum, trader) => sum + Math.abs(parseFloat(trader.size || 0)), 0);
+  }
+  // Checker (data-api) positions carry a flat per-wallet share count instead.
+  const size = parseFloat(position?.size);
+  return Number.isFinite(size) ? Math.abs(size) : 0;
 }
 
 function getBinaryOutcomeSide(position) {
@@ -231,8 +236,9 @@ function getNearBalancedConditionIds(positions) {
   return balanced;
 }
 
-function filterBalancedPositions(positions) {
-  if (!hideBalancedPairs || !positions?.length) return positions || [];
+function filterBalancedPositions(positions, hideOverride) {
+  const hide = hideOverride ?? hideBalancedPairs;
+  if (!hide || !positions?.length) return positions || [];
   const balancedConditionIds = getNearBalancedConditionIds(positions);
   return positions.filter(position => !balancedConditionIds.has(position.conditionId));
 }
@@ -255,13 +261,14 @@ function getPositionOdds(position) {
  * retained; events entirely outside the range are dropped. At the default
  * 0–100c bound nothing is filtered.
  */
-function filterByOddsRange(positions) {
-  if (oddsFilterMax >= 1 || !positions?.length) return positions || [];
+function filterByOddsRange(positions, maxOverride) {
+  const oddsMax = maxOverride ?? oddsFilterMax;
+  if (oddsMax >= 1 || !positions?.length) return positions || [];
   const passing = new Set();
   for (const position of positions) {
     if (!position?.conditionId) continue;
     const odds = getPositionOdds(position);
-    if (odds != null && odds <= oddsFilterMax + 1e-9) passing.add(position.conditionId);
+    if (odds != null && odds <= oddsMax + 1e-9) passing.add(position.conditionId);
   }
   // Positions without a conditionId can't be grouped into an event — keep them.
   return positions.filter(p => !p.conditionId || passing.has(p.conditionId));
@@ -2137,14 +2144,18 @@ function buildChangeTooltip(details) {
 /**
  * Find model portfolio position info
  */
-function findModelPosition(conditionId, outcomeIndex) {
+function findModelPosition(conditionId, outcomeIndex, outcome) {
   if (!aggregatedPortfolio?.positions) return null;
 
+  // Checker positions and the aggregated model both come from the data-api,
+  // which indexes outcomes Yes=0 / No=1 — match the index exactly. The old
+  // label fallbacks assumed the reverse and cross-matched a wallet's Yes row
+  // to the model's No position. Label match only when the index is missing.
   return aggregatedPortfolio.positions.find(p =>
     p.conditionId === conditionId &&
-    (p.outcomeIndex === outcomeIndex ||
-     (p.outcome === 'Yes' && outcomeIndex === 1) ||
-     (p.outcome === 'No' && outcomeIndex === 0))
+    (p.outcomeIndex != null && outcomeIndex != null
+      ? p.outcomeIndex === outcomeIndex
+      : (outcome != null && p.outcome === outcome))
   );
 }
 
@@ -2205,37 +2216,85 @@ async function runChecker(address) {
 
     document.getElementById('checker-positions-count').textContent = positions.length;
 
-    if (positions.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="11" class="loading">No positions found for this address</td></tr>';
-      return;
-    }
+    // Stash the fetched portfolio so the filter/stack controls can re-render
+    // without refetching, then render.
+    checkerData = { positions, totalCapital, modelTotalExposure };
+    checkerStackOverrides.clear();
+    renderCheckerTable();
 
-    // Rank markets by this wallet's size, mirroring the main Portfolio's #
-    // column: one number per market (Yes+No exposures summed), largest first.
-    // Rows render in that order so both outcome rows of a market sit together.
-    const marketExposure = new Map();
-    for (const pos of positions) {
-      const exp = Math.abs(parseFloat(pos.currentValue || 0));
-      marketExposure.set(pos.conditionId, (marketExposure.get(pos.conditionId) || 0) + exp);
-    }
-    const marketRank = new Map();
-    [...marketExposure.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .forEach(([conditionId], i) => marketRank.set(conditionId, i + 1));
-    const sortedPositions = [...positions].sort((a, b) => {
-      const rankDiff = marketRank.get(a.conditionId) - marketRank.get(b.conditionId);
-      if (rankDiff !== 0) return rankDiff;
-      return Math.abs(parseFloat(b.currentValue || 0)) - Math.abs(parseFloat(a.currentValue || 0));
-    });
+  } catch (error) {
+    console.error('Checker error:', error);
+    tbody.innerHTML = `<tr><td colspan="11" class="loading">Error: ${error.message}</td></tr>`;
+  }
+}
 
-    // Build positions table
-    const rows = sortedPositions.map(pos => {
+// Last successful checker fetch + this section's own filter/stack state —
+// independent of the main Portfolio's controls, same semantics.
+let checkerData = null;
+let checkerOddsFilterMax = 1.0;
+let checkerHideBalanced = false;
+let checkerStackEvents = 'off';
+const checkerStackOverrides = new Set();
+
+function isCheckerEventCollapsed(key) {
+  const defaultCollapsed = checkerStackEvents === 'folded';
+  return checkerStackOverrides.has(key) ? !defaultCollapsed : defaultCollapsed;
+}
+
+function toggleCheckerEventStack(key) {
+  if (checkerStackOverrides.has(key)) checkerStackOverrides.delete(key);
+  else checkerStackOverrides.add(key);
+  renderCheckerTable();
+}
+
+/**
+ * Render the checker's positions table from `checkerData`, applying the
+ * section's odds-range / near-balanced filters and event stacking.
+ */
+function renderCheckerTable() {
+  const tbody = document.getElementById('checker-tbody');
+  updateCheckerBalancedButton();
+  updateCheckerStackButton();
+  if (!tbody || !checkerData) return;
+
+  const { totalCapital, modelTotalExposure } = checkerData;
+  const positions = filterByOddsRange(
+    filterBalancedPositions(checkerData.positions, checkerHideBalanced),
+    checkerOddsFilterMax
+  );
+
+  if (positions.length === 0) {
+    tbody.innerHTML = checkerData.positions.length === 0
+      ? '<tr><td colspan="11" class="loading">No positions found for this address</td></tr>'
+      : '<tr><td colspan="11" class="loading">No positions match the active filters</td></tr>';
+    return;
+  }
+
+  // Rank markets by this wallet's size, mirroring the main Portfolio's #
+  // column: one number per market (Yes+No exposures summed), largest first.
+  // Rows render in that order so both outcome rows of a market sit together.
+  const marketExposure = new Map();
+  for (const pos of positions) {
+    const exp = Math.abs(parseFloat(pos.currentValue || 0));
+    marketExposure.set(pos.conditionId, (marketExposure.get(pos.conditionId) || 0) + exp);
+  }
+  const marketRank = new Map();
+  [...marketExposure.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .forEach(([conditionId], i) => marketRank.set(conditionId, i + 1));
+  const sortedPositions = [...positions].sort((a, b) => {
+    const rankDiff = marketRank.get(a.conditionId) - marketRank.get(b.conditionId);
+    if (rankDiff !== 0) return rankDiff;
+    return Math.abs(parseFloat(b.currentValue || 0)) - Math.abs(parseFloat(a.currentValue || 0));
+  });
+
+  const buildRow = (pos, indexCell) => {
       const exposure = Math.abs(parseFloat(pos.currentValue || 0));
       const userPct = totalCapital > 0 ? (exposure / totalCapital) * 100 : 0;
 
-      // Find matching model position
-      const outcomeIndex = pos.outcomeIndex !== undefined ? pos.outcomeIndex : (pos.outcome === 'Yes' ? 1 : 0);
-      const modelPos = findModelPosition(pos.conditionId, outcomeIndex);
+      // Find matching model position (data-api outcome order: Yes=0, No=1)
+      const outcomeIndex = pos.outcomeIndex !== undefined ? pos.outcomeIndex : (pos.outcome === 'Yes' ? 0 : 1);
+      const modelPos = findModelPosition(pos.conditionId, outcomeIndex, pos.outcome);
       const modelPct = modelPos && modelTotalExposure > 0
         ? (modelPos.totalExposure / modelTotalExposure) * 100
         : 0;
@@ -2275,7 +2334,7 @@ async function runChecker(address) {
 
       return `
         <tr>
-          <td class="market-index">${marketRank.get(pos.conditionId) || '-'}</td>
+          <td class="market-index">${indexCell}</td>
           <td>
             <a href="${marketUrl}" target="_blank" class="market-link">${pos.title || 'Unknown Market'}</a>
           </td>
@@ -2301,14 +2360,125 @@ async function runChecker(address) {
           </td>
         </tr>
       `;
-    });
+  };
 
-    tbody.innerHTML = rows.join('');
-
-  } catch (error) {
-    console.error('Checker error:', error);
-    tbody.innerHTML = `<tr><td colspan="11" class="loading">Error: ${error.message}</td></tr>`;
+  if (checkerStackEvents === 'off') {
+    tbody.innerHTML = sortedPositions
+      .map(pos => buildRow(pos, marketRank.get(pos.conditionId) || '-'))
+      .join('');
+    return;
   }
+
+  // Event-stack mode — same shape as the main Portfolio: group markets that
+  // share an event into one section, ranked sequentially in display order;
+  // rows inside a section drop their own "#" (the header owns it).
+  const order = [];
+  const groups = new Map();
+  for (const pos of sortedPositions) {
+    const key = pos.eventSlug ? 'e:' + pos.eventSlug : 'c:' + pos.conditionId;
+    if (!groups.has(key)) {
+      groups.set(key, []);
+      order.push(key);
+    }
+    groups.get(key).push(pos);
+  }
+
+  let html = '';
+  let eventRank = 0;
+  for (const key of order) {
+    const eventPositions = groups.get(key);
+    const marketCount = new Set(eventPositions.map(p => p.conditionId)).size;
+    eventRank++;
+
+    if (marketCount < 2) {
+      html += eventPositions.map(pos => buildRow(pos, eventRank)).join('');
+      continue;
+    }
+
+    const eventExposure = eventPositions.reduce((s, p) => s + Math.abs(parseFloat(p.currentValue || 0)), 0);
+    const eventAllocPct = totalCapital > 0 ? (eventExposure / totalCapital) * 100 : 0;
+    const eventSlug = eventPositions[0].eventSlug;
+    const eventUrl = polymarketUrl('/event/' + eventSlug);
+    const icon = eventPositions[0].icon;
+    const collapsed = isCheckerEventCollapsed(key);
+
+    html += `
+      <tr class="event-stack-header${collapsed ? ' collapsed' : ''}">
+        <td class="market-index">${eventRank}</td>
+        <td colspan="10">
+          <div class="event-stack-header-inner">
+            ${icon ? `<img src="${icon}" class="market-icon" alt="">` : ''}
+            <a href="${eventUrl}" target="_blank" class="market-link event-stack-title">${humanizeEventTitle(eventSlug)}</a>
+            <span class="event-stack-meta">${marketCount} markets</span>
+            <button type="button" class="event-fold-btn${collapsed ? ' collapsed' : ''}"
+              onclick="toggleCheckerEventStack('${key.replace(/'/g, "\\'")}')"
+              aria-expanded="${collapsed ? 'false' : 'true'}"
+              aria-label="${collapsed ? 'Show' : 'Hide'} this event's markets"
+              title="${collapsed ? 'Show' : 'Hide'} this event's ${marketCount} markets">${CHEVRON_ICON}</button>
+            <span class="event-stack-meta event-stack-exposure">${formatUSD(eventExposure)} &middot; ${eventAllocPct.toFixed(2)}%</span>
+          </div>
+        </td>
+      </tr>
+    `;
+    if (collapsed) continue;
+    html += eventPositions.map(pos => buildRow(pos, '')).join('');
+  }
+  tbody.innerHTML = html;
+}
+
+// ─── Checker filter/stack controls — mirror the main Portfolio's ───────────
+
+function updateCheckerBalancedButton() {
+  const btn = document.getElementById('checker-balanced-filter-btn');
+  if (!btn) return;
+  btn.innerHTML = checkerHideBalanced ? EYE_OFF_ICON : EYE_ICON;
+  btn.classList.toggle('active', checkerHideBalanced);
+  btn.setAttribute('aria-pressed', checkerHideBalanced ? 'true' : 'false');
+  btn.setAttribute(
+    'aria-label',
+    checkerHideBalanced ? 'Show near-balanced positions' : 'Hide near-balanced positions'
+  );
+}
+
+function updateCheckerStackButton() {
+  const btn = document.getElementById('checker-stack-events-btn');
+  if (!btn) return;
+  btn.innerHTML = STACK_ICON;
+  btn.classList.toggle('active', checkerStackEvents !== 'off');
+  btn.classList.toggle('folded', checkerStackEvents === 'folded');
+  btn.setAttribute('aria-pressed', checkerStackEvents !== 'off' ? 'true' : 'false');
+  const label = checkerStackEvents === 'off'
+    ? 'Stack markets by event'
+    : checkerStackEvents === 'expanded'
+      ? 'Stacked — click to collapse all events'
+      : 'Stacked & collapsed — click to unstack';
+  btn.setAttribute('aria-label', label);
+  btn.setAttribute('title', label);
+}
+
+function initCheckerControls() {
+  const sel = document.getElementById('checker-odds-filter');
+  if (sel) {
+    sel.value = checkerOddsFilterMax.toFixed(2);
+    sel.addEventListener('change', () => {
+      const v = parseFloat(sel.value);
+      checkerOddsFilterMax = Number.isFinite(v) ? v : 1.0;
+      renderCheckerTable();
+    });
+  }
+  updateCheckerBalancedButton();
+  document.getElementById('checker-balanced-filter-btn')?.addEventListener('click', () => {
+    checkerHideBalanced = !checkerHideBalanced;
+    renderCheckerTable();
+  });
+  updateCheckerStackButton();
+  document.getElementById('checker-stack-events-btn')?.addEventListener('click', () => {
+    checkerStackEvents = checkerStackEvents === 'off' ? 'expanded'
+      : checkerStackEvents === 'expanded' ? 'folded'
+      : 'off';
+    checkerStackOverrides.clear();
+    renderCheckerTable();
+  });
 }
 
 /**
@@ -2329,6 +2499,8 @@ function initChecker() {
       runChecker(address);
     }
   });
+
+  initCheckerControls();
 }
 
 // Start

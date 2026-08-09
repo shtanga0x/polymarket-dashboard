@@ -10,7 +10,7 @@
   "include_tiers": [
     1
   ],
-  "traders_column_label": "Tier1 Traders",
+  "traders_column_label": "Traders",
   "github_url": "https://github.com/shtanga0x/polymarket-dashboard",
   "polymarket_referral": "shtanga",
   "poll_interval_seconds": 300,
