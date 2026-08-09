@@ -2282,13 +2282,25 @@ function renderCheckerTable() {
   [...marketExposure.entries()]
     .sort((a, b) => b[1] - a[1])
     .forEach(([conditionId], i) => marketRank.set(conditionId, i + 1));
-  const sortedPositions = [...positions].sort((a, b) => {
-    const rankDiff = marketRank.get(a.conditionId) - marketRank.get(b.conditionId);
-    if (rankDiff !== 0) return rankDiff;
-    return Math.abs(parseFloat(b.currentValue || 0)) - Math.abs(parseFloat(a.currentValue || 0));
-  });
 
-  const buildRow = (pos, indexCell) => {
+  // One entry per market, in rank order; a market's outcome rows render
+  // together under a single #/title cell (Yes first, like the main Portfolio).
+  const marketGroups = new Map();
+  for (const pos of positions) {
+    if (!marketGroups.has(pos.conditionId)) marketGroups.set(pos.conditionId, []);
+    marketGroups.get(pos.conditionId).push(pos);
+  }
+  const orderedGroups = [...marketGroups.values()];
+  orderedGroups.sort((a, b) => marketRank.get(a[0].conditionId) - marketRank.get(b[0].conditionId));
+  for (const group of orderedGroups) {
+    group.sort((a, b) => {
+      if (a.outcome === 'Yes' && b.outcome !== 'Yes') return -1;
+      if (a.outcome !== 'Yes' && b.outcome === 'Yes') return 1;
+      return Math.abs(parseFloat(b.currentValue || 0)) - Math.abs(parseFloat(a.currentValue || 0));
+    });
+  }
+
+  const buildRow = (pos, indexCell, isFirst, rowSpanCount) => {
       const exposure = Math.abs(parseFloat(pos.currentValue || 0));
       const userPct = totalCapital > 0 ? (exposure / totalCapital) * 100 : 0;
 
@@ -2332,12 +2344,20 @@ function renderCheckerTable() {
         ? ` <span class="outcome-rank" title="This outcome's rank in the model portfolio — the #N used in bot alerts">#${modelPos._botRank}</span>`
         : '';
 
+      // Market-level cells (# and title) render once per market with a rowspan
+      // covering its outcome rows, matching the main Portfolio's presentation.
+      const rowspanAttr = rowSpanCount > 1 ? `rowspan="${rowSpanCount}"` : '';
+      const marketCells = isFirst ? `
+          <td ${rowspanAttr} class="market-index">${indexCell}</td>
+          <td ${rowspanAttr}>
+            <div class="market-cell">
+              ${pos.icon ? `<img src="${pos.icon}" class="market-icon" alt="">` : '<div class="market-icon"></div>'}
+              <a href="${marketUrl}" target="_blank" class="market-link">${pos.title || 'Unknown Market'}</a>
+            </div>
+          </td>` : '';
+
       return `
-        <tr>
-          <td class="market-index">${indexCell}</td>
-          <td>
-            <a href="${marketUrl}" target="_blank" class="market-link">${pos.title || 'Unknown Market'}</a>
-          </td>
+        <tr class="${isFirst ? 'market-first-row' : 'market-continuation-row'}">${marketCells}
           <td><span class="${outcomeClass}">${pos.outcome || '-'}</span>${modelRankBadge}</td>
           <td>${formatExposureWithShares(exposure, pos.size)}</td>
           <td>${userPct.toFixed(2)}%</td>
@@ -2362,9 +2382,12 @@ function renderCheckerTable() {
       `;
   };
 
+  const renderGroup = (group, indexCell) =>
+    group.map((pos, i) => buildRow(pos, indexCell, i === 0, group.length)).join('');
+
   if (checkerStackEvents === 'off') {
-    tbody.innerHTML = sortedPositions
-      .map(pos => buildRow(pos, marketRank.get(pos.conditionId) || '-'))
+    tbody.innerHTML = orderedGroups
+      .map(group => renderGroup(group, marketRank.get(group[0].conditionId) || '-'))
       .join('');
     return;
   }
@@ -2373,25 +2396,27 @@ function renderCheckerTable() {
   // share an event into one section, ranked sequentially in display order;
   // rows inside a section drop their own "#" (the header owns it).
   const order = [];
-  const groups = new Map();
-  for (const pos of sortedPositions) {
+  const groups = new Map(); // event key -> array of market groups
+  for (const group of orderedGroups) {
+    const pos = group[0];
     const key = pos.eventSlug ? 'e:' + pos.eventSlug : 'c:' + pos.conditionId;
     if (!groups.has(key)) {
       groups.set(key, []);
       order.push(key);
     }
-    groups.get(key).push(pos);
+    groups.get(key).push(group);
   }
 
   let html = '';
   let eventRank = 0;
   for (const key of order) {
-    const eventPositions = groups.get(key);
-    const marketCount = new Set(eventPositions.map(p => p.conditionId)).size;
+    const eventGroups = groups.get(key);
+    const eventPositions = eventGroups.flat();
+    const marketCount = eventGroups.length;
     eventRank++;
 
     if (marketCount < 2) {
-      html += eventPositions.map(pos => buildRow(pos, eventRank)).join('');
+      html += renderGroup(eventGroups[0], eventRank);
       continue;
     }
 
@@ -2421,7 +2446,7 @@ function renderCheckerTable() {
       </tr>
     `;
     if (collapsed) continue;
-    html += eventPositions.map(pos => buildRow(pos, '')).join('');
+    html += eventGroups.map(group => renderGroup(group, '')).join('');
   }
   tbody.innerHTML = html;
 }
