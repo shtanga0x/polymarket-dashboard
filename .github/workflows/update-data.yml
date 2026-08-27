@@ -59,6 +59,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Configure R2 upload behaviour
+        # The AWS CLI switches to multipart above 8 MB with 8 MB chunks, and
+        # trader_portfolios.json sits just over that line (9 MB core, 18 MB
+        # watch). Each such upload then costs CreateMultipartUpload + 2-3x
+        # UploadPart + CompleteMultipartUpload instead of one PutObject -- all
+        # R2 class-A ops, whose included pool is 1M/month. Raising the
+        # threshold past the largest object makes every upload a single
+        # PutObject. (2026-08-27: this alone was ~479k class-A ops/month.)
+        run: |
+          aws configure set default.s3.multipart_threshold 64MB
+          aws configure set default.s3.multipart_chunksize 64MB
+
       - name: Download previous run state from R2
         # Recent-changes diffing and the PnL scrape cache compare against the
         # PREVIOUS run. Files in git are not updated by CI, so the live copies
@@ -112,10 +124,21 @@ jobs:
             --checksum-algorithm CRC32 \
             --cache-control "public, max-age=31536000, immutable"
 
-          # 2. Flat copies — backward compatibility + previous-state source
-          #    for the next run.
+          # 2. Flat copies — previous-state source for the next run, plus the
+          #    two files that are only ever read from flat paths.
+          #    recent_changes / wm_marks / wm_offsets are NOT copied here: the
+          #    frontend fetches them from the snapshot prefix (metadata.snapshot
+          #    is always set by fetch_data.js in CI, so the flat fallback in
+          #    app.js is only reachable by a stale tab, which recovers on
+          #    reload). Writing them once instead of twice saves ~206k R2
+          #    class-A ops/month. aggregated_portfolio + trader_portfolios must
+          #    stay flat -- the "Download previous run state" step above reads
+          #    them from flat paths.
           aws s3 cp "$SRC/" "$DST/" \
             --recursive --exclude "metadata.json" \
+            --exclude "recent_changes.json" \
+            --exclude "wm_marks.json" \
+            --exclude "wm_offsets.json" \
             --endpoint-url "$R2_ENDPOINT" \
             --checksum-algorithm CRC32 \
             --cache-control "public, max-age=60"
@@ -131,9 +154,21 @@ jobs:
         if: steps.fetch.outcome == 'success'
         run: |
           set -euo pipefail
+          # `aws s3 rm --recursive` costs a ListObjects (class A) per snapshot
+          # on top of the DeleteObjects. The snapshot file set is fixed and
+          # known, so delete the keys directly instead: DeleteObject is free,
+          # and only the one outer `ls` stays billable. ~75k class-A ops/month.
+          # NOTE: keep SNAP_FILES in sync with the --exclude list in step 1 --
+          # a file added to the snapshot but missing here would never be pruned.
+          SNAP_FILES="aggregated_portfolio.json trader_portfolios.json recent_changes.json wm_marks.json wm_offsets.json"
           aws s3 ls "s3://polymarket-data/$SITE/snap/" --endpoint-url "$R2_ENDPOINT" \
             | awk '{print $2}' | tr -d '/' | sort -n | head -n -5 \
             | while read -r old; do
-                [ -n "$old" ] && aws s3 rm "s3://polymarket-data/$SITE/snap/$old/" \
-                  --recursive --endpoint-url "$R2_ENDPOINT"
+                [ -n "$old" ] || continue
+                objs=$(for f in $SNAP_FILES; do
+                         printf '{"Key":"%s/snap/%s/%s"},' "$SITE" "$old" "$f"
+                       done | sed 's/,$//')
+                aws s3api delete-objects --bucket polymarket-data \
+                  --delete "{\"Objects\":[$objs],\"Quiet\":true}" \
+                  --endpoint-url "$R2_ENDPOINT"
               done

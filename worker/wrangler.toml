@@ -3,11 +3,13 @@ main = "index.js"
 compatibility_date = "2024-01-01"
 
 [triggers]
-# Every minute, ADAPTIVE (2026-07-03): the scheduled handler first checks GitHub
-# for a queued/in-progress update-data run and skips the tick if one exists, so
-# the old 1-min failure mode (runs queueing behind the per-site concurrency
-# group → mass-cancel emails) can't recur. Slow proxy spells self-throttle back
-# to the old effective cadence.
+# Fires every minute; the handler dispatches on a ~90s average by skipping one
+# tick in three (2026-08-27 — a flat 60s exhausted the 1M/month R2 class-A pool
+# by day ~16 of the billing period). ADAPTIVE (2026-07-03): the scheduled
+# handler also checks GitHub for a queued/in-progress update-data run and skips
+# the tick if one exists, so the old 1-min failure mode (runs queueing behind
+# the per-site concurrency group → mass-cancel emails) can't recur. Slow proxy
+# spells self-throttle further.
 crons = ["* * * * *"]
 
 # Secrets (set with: wrangler secret put GITHUB_PAT)
