@@ -1271,7 +1271,9 @@ function renderChangesTable(deltaFilter = 0, timeFilter = 'all') {
     const subset = (aggregatedPortfolio?.positions || []).filter(p =>
       matchedConditionIds.has(p.conditionId)
     );
-    renderPositionsAsPortfolioStyle(subset, thead, tbody);
+    // % Alloc is share of the WHOLE model portfolio (same as the Portfolio
+    // table), not of the filtered subset — otherwise it always sums to 100%.
+    renderPositionsAsPortfolioStyle(subset, thead, tbody, aggregatedPortfolio?.summary?.totalExposure);
     return;
   }
 
