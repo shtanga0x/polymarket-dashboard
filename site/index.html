@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/style.css?v=unified-20260628">
+  <link rel="stylesheet" href="assets/style.css?v=unified-20261002">
 </head>
 <body>
   <div class="top-shell">
@@ -261,8 +261,7 @@
                 <th>Market</th>
                 <th>Side</th>
                 <th class="tooltip-header" title="Current market value of this wallet's position: shares &times; current price. Not cost basis &mdash; it moves with the market.">Your Exposure<span class="header-info">shares &times; price</span></th>
-                <th class="tooltip-header" title="This position's share of the wallet's total capital (open positions + USDC balance).">Your %</th>
-                <th class="tooltip-header" title="This outcome's share of the model portfolio's total exposure.">Model %</th>
+                <th id="checker-pct-header" class="sortable tooltip-header" onclick="cycleCheckerPctSort()" title="Your % = this position's share of the wallet's total capital (open positions + USDC balance). Model % = this outcome's share of the model portfolio's total exposure. (x…) = Your % &divide; Model %. Click to sort by Your %, Model %, then the ratio.">%%<span class="header-info" id="checker-pct-sort-label">your / model (x)</span></th>
                 <th id="traders-column-label" class="tooltip-header" title="Tracked traders currently holding this outcome in the model portfolio.">Traders</th>
                 <th class="tooltip-header">1h Change<span class="header-info">last hour</span></th>
                 <th class="tooltip-header">24h Change<span class="header-info">1h&ndash;24h ago</span></th>
@@ -276,7 +275,7 @@
               </tr>
             </thead>
             <tbody id="checker-tbody">
-              <tr><td colspan="11" class="loading">Enter an address to check</td></tr>
+              <tr><td colspan="10" class="loading">Enter an address to check</td></tr>
             </tbody>
           </table>
         </div>
@@ -409,6 +408,6 @@
   </footer>
 
   <script src="assets/site-config.js"></script>
-  <script src="assets/app.js?v=unified-20260628"></script>
+  <script src="assets/app.js?v=unified-20261002"></script>
 </body>
 </html>

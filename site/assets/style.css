@@ -1175,3 +1175,16 @@ td[rowspan] {
   opacity: 0.55;
   white-space: nowrap;
 }
+
+/* Checker "%%" column: Your % / Model % (x ratio) */
+.alloc-pct-cell {
+  white-space: nowrap;
+}
+
+.alloc-ratio {
+  color: var(--text-secondary);
+}
+
+th.sortable.sorted {
+  color: var(--text-primary);
+}

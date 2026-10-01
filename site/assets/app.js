@@ -2169,11 +2169,11 @@ async function runChecker(address) {
   const tbody = document.getElementById('checker-tbody');
 
   if (!address || !address.startsWith('0x') || address.length !== 42) {
-    tbody.innerHTML = '<tr><td colspan="11" class="loading">Please enter a valid Ethereum address (0x...)</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" class="loading">Please enter a valid Ethereum address (0x...)</td></tr>';
     return;
   }
 
-  tbody.innerHTML = '<tr><td colspan="11" class="loading">Loading portfolio data...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="10" class="loading">Loading portfolio data...</td></tr>';
   resultsDiv.style.display = 'block';
 
   try {
@@ -2226,7 +2226,7 @@ async function runChecker(address) {
 
   } catch (error) {
     console.error('Checker error:', error);
-    tbody.innerHTML = `<tr><td colspan="11" class="loading">Error: ${error.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" class="loading">Error: ${error.message}</td></tr>`;
   }
 }
 
@@ -2237,6 +2237,33 @@ let checkerOddsFilterMax = 1.0;
 let checkerHideBalanced = false;
 let checkerStackEvents = 'off';
 const checkerStackOverrides = new Set();
+// "%%" column sort: null = default (# rank by your size), else 'user' /
+// 'model' / 'ratio' (Your % ÷ Model %), always largest first.
+let checkerPctSort = null;
+const CHECKER_PCT_SORTS = [null, 'user', 'model', 'ratio'];
+const CHECKER_PCT_SORT_LABELS = {
+  user: 'sorted by your % ▼',
+  model: 'sorted by model % ▼',
+  ratio: 'sorted by x ▼'
+};
+
+function cycleCheckerPctSort() {
+  const i = CHECKER_PCT_SORTS.indexOf(checkerPctSort);
+  checkerPctSort = CHECKER_PCT_SORTS[(i + 1) % CHECKER_PCT_SORTS.length];
+  renderCheckerTable();
+}
+
+function updateCheckerPctHeader() {
+  const label = document.getElementById('checker-pct-sort-label');
+  if (label) label.textContent = CHECKER_PCT_SORT_LABELS[checkerPctSort] || 'your / model (x)';
+  document.getElementById('checker-pct-header')?.classList.toggle('sorted', !!checkerPctSort);
+}
+
+/** "x10", "x2.5", "x0.25" — Your % ÷ Model %, trimmed to a readable precision. */
+function formatAllocRatio(ratio) {
+  const digits = ratio >= 10 ? 0 : ratio >= 1 ? 1 : 2;
+  return 'x' + parseFloat(ratio.toFixed(digits));
+}
 
 function isCheckerEventCollapsed(key) {
   const defaultCollapsed = checkerStackEvents === 'folded';
@@ -2257,6 +2284,7 @@ function renderCheckerTable() {
   const tbody = document.getElementById('checker-tbody');
   updateCheckerBalancedButton();
   updateCheckerStackButton();
+  updateCheckerPctHeader();
   if (!tbody || !checkerData) return;
 
   const { totalCapital, modelTotalExposure } = checkerData;
@@ -2267,8 +2295,8 @@ function renderCheckerTable() {
 
   if (positions.length === 0) {
     tbody.innerHTML = checkerData.positions.length === 0
-      ? '<tr><td colspan="11" class="loading">No positions found for this address</td></tr>'
-      : '<tr><td colspan="11" class="loading">No positions match the active filters</td></tr>';
+      ? '<tr><td colspan="10" class="loading">No positions found for this address</td></tr>'
+      : '<tr><td colspan="10" class="loading">No positions match the active filters</td></tr>';
     return;
   }
 
@@ -2294,6 +2322,30 @@ function renderCheckerTable() {
   }
   const orderedGroups = [...marketGroups.values()];
   orderedGroups.sort((a, b) => marketRank.get(a[0].conditionId) - marketRank.get(b[0].conditionId));
+
+  // Your % / Model % per outcome, computed once for both the %% cell and its sort.
+  for (const pos of positions) {
+    const exposure = Math.abs(parseFloat(pos.currentValue || 0));
+    // Find matching model position (data-api outcome order: Yes=0, No=1)
+    const outcomeIndex = pos.outcomeIndex !== undefined ? pos.outcomeIndex : (pos.outcome === 'Yes' ? 0 : 1);
+    const modelPos = findModelPosition(pos.conditionId, outcomeIndex, pos.outcome);
+    pos._userPct = totalCapital > 0 ? (exposure / totalCapital) * 100 : 0;
+    pos._modelPct = modelPos && modelTotalExposure > 0
+      ? (modelPos.totalExposure / modelTotalExposure) * 100
+      : 0;
+    pos._ratio = pos._modelPct > 0 ? pos._userPct / pos._modelPct : null;
+  }
+
+  // %% sort: a market ranks by its strongest outcome on the chosen metric, so
+  // Yes/No rows stay together. Outcomes the model doesn't hold have no ratio
+  // and sink to the bottom of the ratio sort. Ties keep the # rank order.
+  if (checkerPctSort) {
+    const key = { user: '_userPct', model: '_modelPct', ratio: '_ratio' }[checkerPctSort];
+    const groupValue = g => g.reduce(
+      (max, p) => (p[key] != null && p[key] > max ? p[key] : max), -Infinity);
+    orderedGroups.sort((a, b) => groupValue(b) - groupValue(a)
+      || marketRank.get(a[0].conditionId) - marketRank.get(b[0].conditionId));
+  }
   for (const group of orderedGroups) {
     group.sort((a, b) => {
       if (a.outcome === 'Yes' && b.outcome !== 'Yes') return -1;
@@ -2304,14 +2356,11 @@ function renderCheckerTable() {
 
   const buildRow = (pos, indexCell, isFirst, rowSpanCount) => {
       const exposure = Math.abs(parseFloat(pos.currentValue || 0));
-      const userPct = totalCapital > 0 ? (exposure / totalCapital) * 100 : 0;
-
-      // Find matching model position (data-api outcome order: Yes=0, No=1)
       const outcomeIndex = pos.outcomeIndex !== undefined ? pos.outcomeIndex : (pos.outcome === 'Yes' ? 0 : 1);
       const modelPos = findModelPosition(pos.conditionId, outcomeIndex, pos.outcome);
-      const modelPct = modelPos && modelTotalExposure > 0
-        ? (modelPos.totalExposure / modelTotalExposure) * 100
-        : 0;
+      const fmtPct = v => (v > 0 && v < 0.01 ? '<0.01' : v.toFixed(2)) + '%';
+      const pctCell = `${fmtPct(pos._userPct)} / ${pos._modelPct > 0 ? fmtPct(pos._modelPct) : '-'}`
+        + (pos._ratio != null ? ` <span class="alloc-ratio">(${formatAllocRatio(pos._ratio)})</span>` : '');
 
       // Trader count
       const traderCount = modelPos?.traderCount || 0;
@@ -2362,8 +2411,7 @@ function renderCheckerTable() {
         <tr class="${isFirst ? 'market-first-row' : 'market-continuation-row'}">${marketCells}
           <td><span class="${outcomeClass}">${pos.outcome || '-'}</span>${modelRankBadge}</td>
           <td>${formatExposureWithShares(exposure, pos.size)}</td>
-          <td>${userPct.toFixed(2)}%</td>
-          <td>${modelPct > 0 ? modelPct.toFixed(2) + '%' : '-'}</td>
+          <td class="alloc-pct-cell">${pctCell}</td>
           <td>${traderCount > 0 ? traderHtml : '-'}</td>
           <td class="tooltip ${h1Class}">
             ${h1Sign}${formatUSD(changes.h1)}
@@ -2432,7 +2480,7 @@ function renderCheckerTable() {
     html += `
       <tr class="event-stack-header${collapsed ? ' collapsed' : ''}">
         <td class="market-index">${eventRank}</td>
-        <td colspan="10">
+        <td colspan="9">
           <div class="event-stack-header-inner">
             ${icon ? `<img src="${icon}" class="market-icon" alt="">` : ''}
             <a href="${eventUrl}" target="_blank" class="market-link event-stack-title">${humanizeEventTitle(eventSlug)}</a>
