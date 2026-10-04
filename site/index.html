@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/style.css?v=unified-20261004e">
+  <link rel="stylesheet" href="assets/style.css?v=unified-20261004f">
 </head>
 <body>
   <div class="top-shell">
@@ -190,11 +190,28 @@
             <button type="button" class="filter-btn sh-dl" title="Download the chart as PNG">⤓ PNG</button>
           </div>
         </div>
-        <div id="sh-legend" class="sh-legend"></div>
-        <div id="sh-plot" class="sh-plot">
-          <canvas id="sh-canvas" aria-label="Shares held over time"></canvas>
-          <div id="sh-tip" class="sh-tip" hidden></div>
-          <div id="sh-empty" class="sh-empty" hidden></div>
+        <div class="sh-body">
+          <div class="sh-main">
+            <div id="sh-legend" class="sh-legend"></div>
+            <div id="sh-plot" class="sh-plot">
+              <canvas id="sh-canvas" aria-label="Shares held over time"></canvas>
+              <div id="sh-tip" class="sh-tip" hidden></div>
+              <div id="sh-empty" class="sh-empty" hidden></div>
+            </div>
+          </div>
+          <aside id="hp-card" class="hp-card" aria-label="Top holders PnL">
+            <div class="hp-head">
+              <span class="hp-title">Top Holders PnL</span>
+              <span class="filter-tooltip hp-info" data-tooltip="Top N wallets by shares held on each side of this market (all Polymarket holders, not only tracked traders). Each value is the SUM of those wallets' account-wide Polymarket PnL over the window — not the PnL of this position.">&#9432;</span>
+              <div class="hp-n" role="group" aria-label="Number of top holders">
+                <button type="button" class="hp-n-btn active" data-n="10">10</button>
+                <button type="button" class="hp-n-btn" data-n="20">20</button>
+                <button type="button" class="hp-n-btn" data-n="50">50</button>
+              </div>
+            </div>
+            <div id="hp-body" class="hp-body"></div>
+            <div id="hp-foot" class="hp-foot"></div>
+          </aside>
         </div>
       </div>
 
@@ -433,6 +450,6 @@
   </footer>
 
   <script src="assets/site-config.js"></script>
-  <script src="assets/app.js?v=unified-20261004e"></script>
+  <script src="assets/app.js?v=unified-20261004f"></script>
 </body>
 </html>

@@ -25,6 +25,9 @@
  *   GET /history?site=core&cid=0x…&range=1d|1w|1m|max
  *   GET /markets?site=core&status=active|closed     (archive listing)
  *   GET /status
+ *   GET /holders-pnl?cid=0x…&n=10|20|50   top-n holders per outcome (Polymarket-wide, not
+ *                              just tracked traders) with each wallet's
+ *                              ACCOUNT-WIDE PnL over 24h / 7d / 30d / all
  */
 
 const SITES = ['core', 'watch'];
@@ -269,6 +272,127 @@ async function diffSnapshot(env, site, agg, ts, stmts) {
   return { changes: hist.length, added, closed };
 }
 
+// ─── Top holders PnL ─────────────────────────────────────────────────────────
+// Holders come from data-api /holders (ranked by shares on this market). PnL is
+// the wallet's account-wide figure from user-pnl-api — the same series the
+// Polymarket profile chart and the dashboard's "All Time PnL" column use:
+// a window's PnL = last point − first point of that interval's series; all-time
+// = last point. Results are cached in D1 (wallet 15 min, market 5 min) so a
+// popular market costs Polymarket ≤ 1 + 3×100 calls per 15 minutes.
+
+const DATA_API = 'https://data-api.polymarket.com';
+const PNL_API = 'https://user-pnl-api.polymarket.com/user-pnl';
+const HOLDERS_N = 50;
+const WALLET_TTL_S = 15 * 60;
+const MARKET_TTL_S = 5 * 60;
+// 1w/1h serves both 24h (last − point 24h earlier) and 7d; 30d and all-time
+// each need their own series. 3 calls per wallet.
+const PNL_SERIES = [['week', '1w', '1h'], ['m1', '1m', '1d'], ['al', 'all', '1d']];
+const N_CHOICES = [10, 20, 50];
+
+async function getJSON(url, tries = 3) {
+  for (let i = 0; i < tries; i++) {
+    try {
+      const r = await fetch(url, { headers: { 'User-Agent': 'pm-share-history/1.0' }, signal: AbortSignal.timeout(8_000) });
+      if (r.ok) return r.json();
+      if (r.status !== 429 && r.status < 500) throw new Error(`HTTP ${r.status}`);
+    } catch (err) {
+      if (i === tries - 1) throw err;
+    }
+    await new Promise((res) => setTimeout(res, 300 * 2 ** i));
+  }
+  throw new Error('retries exhausted');
+}
+
+async function pool(items, size, fn) {
+  const queue = [...items];
+  await Promise.all(Array.from({ length: Math.min(size, queue.length) }, async () => {
+    while (queue.length) await fn(queue.shift());
+  }));
+}
+
+async function walletPnl(addr) {
+  const out = { d1: null, w1: null, m1: null, al: null };
+  await Promise.all(PNL_SERIES.map(async ([key, interval, fidelity]) => {
+    let s;
+    try { s = await getJSON(`${PNL_API}?user_address=${addr}&interval=${interval}&fidelity=${fidelity}`); }
+    catch { return; }
+    if (!Array.isArray(s) || !s.length) {             // no PnL history = 0
+      if (key === 'week') { out.d1 = 0; out.w1 = 0; } else out[key] = 0;
+      return;
+    }
+    const last = s[s.length - 1];
+    if (key === 'week') {
+      let dayAgo = s[0];
+      for (const pt of s) if (pt.t <= last.t - 86400) dayAgo = pt;
+      out.d1 = last.p - dayAgo.p;
+      out.w1 = last.p - s[0].p;
+    } else {
+      out[key] = key === 'al' ? last.p : last.p - s[0].p;
+    }
+  }));
+  return out;
+}
+
+async function holdersPnl(env, url) {
+  const cid = url.searchParams.get('cid') || '';
+  const n = Number(url.searchParams.get('n') || 10);
+  if (!/^0x[0-9a-fA-F]{64}$/.test(cid) || !N_CHOICES.includes(n)) return json({ error: 'bad_request' }, 400);
+  const db = env.DB;
+  const nowS = Math.floor(Date.now() / 1000);
+
+  // Holder ranking (top 50 per outcome) — cached per market.
+  let cached = await db.prepare('SELECT ts, body FROM holders_pnl_cache WHERE cid = ?').bind(cid).first();
+  let outcomes;
+  if (cached && nowS - cached.ts < MARKET_TTL_S) {
+    outcomes = JSON.parse(cached.body).outcomes;
+  } else {
+    let tokens;
+    try {
+      tokens = await getJSON(`${DATA_API}/holders?market=${cid}&limit=${HOLDERS_N}`);
+    } catch (err) {
+      console.warn('holders fetch failed:', err.message);
+      if (!cached) return json({ error: 'upstream' }, 502);
+      tokens = null;
+    }
+    if (tokens) {
+      outcomes = tokens.map((t) => {
+        const holders = [...(t.holders || [])].sort((a, b) => b.amount - a.amount).slice(0, HOLDERS_N);
+        return {
+          oi: holders[0]?.outcomeIndex ?? null,
+          holders: holders.map((h) => ({ addr: h.proxyWallet.toLowerCase(), name: h.name || h.pseudonym || '', shares: h.amount })),
+        };
+      }).filter((o) => o.oi !== null).sort((a, b) => a.oi - b.oi);
+      await db.prepare('INSERT OR REPLACE INTO holders_pnl_cache (cid, ts, body) VALUES (?, ?, ?)')
+        .bind(cid, nowS, JSON.stringify({ outcomes })).run();
+      cached = { ts: nowS };
+    } else {
+      outcomes = JSON.parse(cached.body).outcomes;      // stale ranking beats no answer
+    }
+  }
+
+  // Account-wide PnL for the top-n wallets of each side: fresh cache rows, fetch the rest.
+  for (const o of outcomes) o.holders = o.holders.slice(0, n);
+  const addrs = [...new Set(outcomes.flatMap((o) => o.holders.map((h) => h.addr)))];
+  const pnl = new Map();
+  for (let i = 0; i < addrs.length; i += 90) {
+    const chunk = addrs.slice(i, i + 90);
+    const rows = (await db.prepare(
+      `SELECT * FROM pnl_cache WHERE ts > ? AND addr IN (${chunk.map(() => '?').join(',')})`
+    ).bind(nowS - WALLET_TTL_S, ...chunk).all()).results;
+    for (const r of rows) pnl.set(r.addr, { d1: r.d1, w1: r.w1, m1: r.m1, al: r.al });
+  }
+  const missing = addrs.filter((a) => !pnl.has(a));
+  await pool(missing, 16, async (a) => { pnl.set(a, await walletPnl(a)); });
+  const fresh = missing.map((a) => [a, nowS, ...['d1', 'w1', 'm1', 'al'].map((k) => pnl.get(a)[k])])
+    .filter((r) => r.slice(2).every((v) => v !== null));   // only cache complete rows
+  if (fresh.length) await db.batch(multiInsert(db, 'INSERT OR REPLACE INTO pnl_cache (addr, ts, d1, w1, m1, al)', '', fresh));
+
+  for (const o of outcomes) for (const h of o.holders) h.pnl = pnl.get(h.addr);
+  console.log(`holders-pnl ${cid.slice(0, 10)} n=${n} wallets=${addrs.length} fetched=${missing.length}`);
+  return json({ cid, n, rankedAt: cached.ts, outcomes }, 200, 60);
+}
+
 // ─── Read API ────────────────────────────────────────────────────────────────
 
 function json(body, status = 200, maxAge = 0) {
@@ -361,6 +485,7 @@ export default {
     if (url.pathname === '/history') return history(env, url);
     if (url.pathname === '/markets') return listMarkets(env, url);
     if (url.pathname === '/status') return status(env);
+    if (url.pathname === '/holders-pnl') return holdersPnl(env, url);
     return json({ error: 'not_found' }, 404);
   },
 };

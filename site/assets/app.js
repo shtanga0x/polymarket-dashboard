@@ -1930,10 +1930,12 @@ function shNiceStep(span, count) {
   return (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 2.5 ? 2.5 : norm <= 5 ? 5 : 10) * mag;
 }
 
-function shTimeTicks(t0, t1) {
+function shTimeTicks(t0, t1, plotW = 700) {
   const span = t1 - t0;
-  const steps = [300, 900, 1800, 3600, 2 * 3600, 3 * 3600, 6 * 3600, 12 * 3600, 86400, 2 * 86400, 7 * 86400, 14 * 86400, 30 * 86400];
-  const step = steps.find(s => span / s <= 7) || 30 * 86400;
+  const steps = [300, 900, 1800, 3600, 2 * 3600, 3 * 3600, 6 * 3600, 12 * 3600, 86400, 2 * 86400, 7 * 86400, 14 * 86400, 30 * 86400, 60 * 86400];
+  // At most 7 labels, and ≥ ~95px apart so bold labels never collide on narrow screens.
+  const maxTicks = Math.max(2, Math.min(7, Math.floor(plotW / 95)));
+  const step = steps.find(s => span / s <= maxTicks) || 60 * 86400;
   const tzOffset = new Date().getTimezoneOffset() * 60;   // align day ticks to local midnight
   const ticks = [];
   for (let t = Math.ceil((t0 - tzOffset) / step) * step + tzOffset; t <= t1; t += step) ticks.push(t);
@@ -1984,7 +1986,7 @@ function shDraw(ctx, width, height, hoverTs, opaque = false) {
     ctx.fillText(shFormatShares(v), SH_PAD.left - 10, y);
   }
   // X labels
-  const { ticks, withDate } = shTimeTicks(g.t0, g.t1);
+  const { ticks, withDate } = shTimeTicks(g.t0, g.t1, g.plotW);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
   for (const t of ticks) ctx.fillText(shFormatTime(t, withDate), g.x(t), SH_PAD.top + g.plotH + 8);
@@ -2115,6 +2117,7 @@ async function loadShareHistory({ silent = false } = {}) {
   if (reqId !== shState.reqId) return;   // a newer market/range request superseded this one
   shState.data = data;
   shUpdateSubtitle();
+  if (hpState.data) hpRender();          // outcome names now known
   if (!data.tracked) {
     shState.series = [];
     shRenderLegend();
@@ -2139,6 +2142,7 @@ function openShareHistory(cid) {
   }
   panel.hidden = false;
   loadShareHistory();
+  openHoldersPnl(cid);
 }
 
 function closeShareHistory() {
@@ -2146,6 +2150,7 @@ function closeShareHistory() {
   if (panel) panel.hidden = true;
   shState.cid = null;
   shState.reqId++;
+  closeHoldersPnl();
 }
 
 function shHideTip() {
@@ -2249,6 +2254,129 @@ function initShareHistory() {
   plot?.addEventListener('mousemove', shOnHover);
   plot?.addEventListener('mouseleave', shHideTip);
   if (plot && 'ResizeObserver' in window) new ResizeObserver(() => shRender()).observe(plot);
+}
+
+// ============================================================
+// TOP HOLDERS PNL (right of the share-history chart)
+// ============================================================
+//
+// For the market open in the share-history panel: the top 10/20/50 wallets by
+// shares on each outcome (Polymarket-wide holders, /api/holders-pnl) and the
+// SUM of their account-wide PnL over 24h / 7d / 30d / all. Wallet PnL is the
+// same user-pnl series the Traders tab's All Time PnL uses.
+
+const HP_WINDOWS = [['d1', '24h'], ['w1', '7d'], ['m1', '30d'], ['al', 'All']];
+const hpState = { cid: null, n: 10, data: null, reqId: 0 };
+
+function hpFormat(v) {
+  if (v === null || !Number.isFinite(v)) return '—';
+  const a = Math.abs(v);
+  const sign = v > 0 ? '+' : v < 0 ? '−' : '';
+  const num = a >= 1e6 ? (a / 1e6).toFixed(a >= 1e7 ? 1 : 2) + 'M'
+    : a >= 1e3 ? (a / 1e3).toFixed(1) + 'K' : a.toFixed(0);
+  return `${sign}$${num}`;
+}
+
+function hpOutcomeName(oi) {
+  const fromHistory = shState.data?.market?.outcomes?.[oi];
+  if (fromHistory) return fromHistory;
+  const pos = (aggregatedPortfolio?.positions || []).find(p => p.conditionId === hpState.cid && p.outcomeIndex === oi);
+  return pos?.outcome || (oi === 0 ? 'Yes' : 'No');
+}
+
+function hpRender(loading = false) {
+  const body = document.getElementById('hp-body');
+  const foot = document.getElementById('hp-foot');
+  if (!body) return;
+  document.querySelectorAll('.hp-n-btn').forEach(b => b.classList.toggle('active', Number(b.dataset.n) === hpState.n));
+  const d = hpState.data;
+  if (!d) {
+    body.innerHTML = `<div class="hp-msg">${loading ? 'Loading holder PnL…' : 'Holder PnL unavailable right now.'}</div>`;
+    if (foot) foot.textContent = '';
+    return;
+  }
+  const sides = d.outcomes.slice(0, 2);
+  // Per side and window: sum over the top-n wallets; count wallets whose window failed to load.
+  const sums = sides.map(o => Object.fromEntries(HP_WINDOWS.map(([k]) => {
+    let total = 0, missing = 0;
+    for (const h of o.holders.slice(0, hpState.n)) {
+      const v = h.pnl?.[k];
+      if (v === null || v === undefined) missing++; else total += v;
+    }
+    return [k, { total, missing, top: [...o.holders.slice(0, hpState.n)].filter(h => Number.isFinite(h.pnl?.[k]))
+      .sort((a, b) => Math.abs(b.pnl[k]) - Math.abs(a.pnl[k])).slice(0, 3) }];
+  })));
+  const max = Math.max(1, ...sums.flatMap(s => HP_WINDOWS.map(([k]) => Math.abs(s[k].total))));
+  const cls = v => v > 0 ? 'positive' : v < 0 ? 'negative' : '';
+  const tipFor = (side, k) => {
+    const s = sums[side]?.[k];
+    if (!s) return '';
+    const lines = s.top.map(h => `${h.name || truncateAddress(h.addr)}: ${hpFormat(h.pnl[k])}`);
+    if (s.missing) lines.push(`${s.missing} wallet(s) failed to load — excluded`);
+    return lines.join('\n');
+  };
+  const bar = (v, side) => {
+    if (!Number.isFinite(v) || v === 0) return '';
+    const w = Math.max(1.5, (Math.abs(v) / max) * 50);
+    return `<span class="hp-bar ${v > 0 ? 'up' : 'down'} ${side}" style="width:${w}%"></span>`;
+  };
+  body.innerHTML = `
+    <div class="hp-grid${loading ? ' loading' : ''}">
+      <span></span>
+      <span class="hp-side left" title="${escapeHtml(hpOutcomeName(sides[0]?.oi))}">${escapeHtml(hpOutcomeName(sides[0]?.oi))}</span>
+      <span></span>
+      <span class="hp-side right" title="${escapeHtml(hpOutcomeName(sides[1]?.oi))}">${sides[1] ? escapeHtml(hpOutcomeName(sides[1].oi)) : ''}</span>
+      ${HP_WINDOWS.map(([k, label]) => {
+        const L = sums[0]?.[k].total, R = sums[1]?.[k].total;
+        return `
+          <span class="hp-win">${label}</span>
+          <span class="hp-val left ${cls(L)}" title="${escapeHtml(tipFor(0, k))}">${sums[0] ? hpFormat(L) : ''}${sums[0]?.[k].missing ? '*' : ''}</span>
+          <span class="hp-track">${bar(L, 'left')}${bar(R, 'right')}<span class="hp-mid"></span></span>
+          <span class="hp-val right ${cls(R)}" title="${escapeHtml(tipFor(1, k))}">${sums[1] ? hpFormat(R) : ''}${sums[1]?.[k].missing ? '*' : ''}</span>`;
+      }).join('')}
+    </div>`;
+  const anyMissing = sums.some(s => HP_WINDOWS.some(([k]) => s[k].missing));
+  if (foot) foot.textContent = `Σ account-wide P&L · top ${hpState.n} holders per side${anyMissing ? ' · * some wallets failed to load' : ''}`;
+}
+
+async function loadHoldersPnl() {
+  const cid = hpState.cid;
+  if (!cid) return;
+  const reqId = ++hpState.reqId;
+  const n = hpState.n;
+  hpRender(true);
+  try {
+    const res = await fetch(`/api/holders-pnl?cid=${encodeURIComponent(cid)}&n=${n}`, { credentials: 'same-origin' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (reqId !== hpState.reqId) return;
+    hpState.data = data;
+    hpRender(false);
+  } catch (err) {
+    if (reqId !== hpState.reqId) return;
+    console.warn('holders pnl failed:', err);
+    if (hpState.data?.cid !== cid || hpState.data?.n !== n) hpState.data = null;
+    hpRender(false);
+  }
+}
+
+function openHoldersPnl(cid) {
+  if (hpState.cid !== cid) { hpState.cid = cid; hpState.data = null; }
+  loadHoldersPnl();
+}
+
+function closeHoldersPnl() {
+  hpState.cid = null;
+  hpState.reqId++;
+}
+
+function initHoldersPnl() {
+  document.querySelectorAll('.hp-n-btn').forEach(btn => btn.addEventListener('click', () => {
+    const n = Number(btn.dataset.n);
+    if (n === hpState.n) return;
+    hpState.n = n;
+    loadHoldersPnl();
+  }));
 }
 
 // ============================================================
@@ -2364,6 +2492,7 @@ function init() {
   initChecker();
   initFloatingTooltip();
   initShareHistory();
+  initHoldersPnl();
 
   // Timers are created exactly once here — never re-created by loadData().
   startAutoReload();

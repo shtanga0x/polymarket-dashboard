@@ -58,3 +58,16 @@ CREATE TABLE IF NOT EXISTS cursors (
   ingests    INTEGER NOT NULL DEFAULT 0,
   rows_total INTEGER NOT NULL DEFAULT 0
 );
+
+-- Top-holders PnL (/holders-pnl): account-wide PnL per wallet (15-min TTL) and
+-- the assembled per-market result (5-min TTL).
+CREATE TABLE IF NOT EXISTS pnl_cache (
+  addr TEXT PRIMARY KEY,
+  ts   INTEGER NOT NULL,
+  d1   REAL, w1 REAL, m1 REAL, al REAL       -- NULL = that window failed to load
+);
+CREATE TABLE IF NOT EXISTS holders_pnl_cache (
+  cid  TEXT PRIMARY KEY,
+  ts   INTEGER NOT NULL,
+  body TEXT NOT NULL
+);
