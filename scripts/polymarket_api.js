@@ -54,9 +54,14 @@ async function fetchWithRetry(url, options = {}, config = {}) {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     // Get a fresh proxy agent each attempt (round-robin rotation)
     const agent = getProxyAgent();
+    // Per-attempt timeout: a dead proxy connection otherwise hangs until the
+    // OS gives up (seen 2026-10-04: one request stalled a watch run ~4 min,
+    // which also makes the dispatcher skip ticks). On timeout the catch below
+    // retries through the next proxy.
     const fetchOptions = {
       ...options,
-      headers: { 'Accept': 'application/json', ...options.headers }
+      headers: { 'Accept': 'application/json', ...options.headers },
+      signal: AbortSignal.timeout(config.request_timeout_ms || 20000)
     };
     if (agent) {
       fetchOptions.dispatcher = agent;
