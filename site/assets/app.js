@@ -2336,7 +2336,9 @@ function hpRender(loading = false) {
       }).join('')}
     </div>`;
   const anyMissing = sums.some(s => HP_WINDOWS.some(([k]) => s[k].missing));
-  if (foot) foot.textContent = `Σ account-wide P&L · top ${hpState.n} holders per side${anyMissing ? ' · * some wallets failed to load' : ''}`;
+  const ageMin = d.asOf ? Math.max(0, Math.round((Date.now() / 1000 - d.asOf) / 60)) : null;
+  const age = ageMin === null ? '' : ageMin < 2 ? ' · just updated' : ` · PnL as of ${ageMin}m ago`;
+  if (foot) foot.textContent = `Σ account-wide P&L · top ${hpState.n} holders per side${age}${anyMissing ? ' · * some wallets failed to load' : ''}`;
 }
 
 async function loadHoldersPnl() {

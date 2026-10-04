@@ -334,63 +334,115 @@ async function walletPnl(addr) {
   return out;
 }
 
-async function holdersPnl(env, url) {
+// Holder ranking for a market: top 50 per outcome, cached in D1.
+async function fetchRanking(env, cid, nowS) {
+  const tokens = await getJSON(`${DATA_API}/holders?market=${cid}&limit=${HOLDERS_N}`);
+  const outcomes = tokens.map((t) => {
+    const holders = [...(t.holders || [])].sort((a, b) => b.amount - a.amount).slice(0, HOLDERS_N);
+    return {
+      oi: holders[0]?.outcomeIndex ?? null,
+      holders: holders.map((h) => ({ addr: h.proxyWallet.toLowerCase(), name: h.name || h.pseudonym || '', shares: h.amount })),
+    };
+  }).filter((o) => o.oi !== null).sort((a, b) => a.oi - b.oi);
+  await env.DB.prepare('INSERT OR REPLACE INTO holders_pnl_cache (cid, ts, body) VALUES (?, ?, ?)')
+    .bind(cid, nowS, JSON.stringify({ outcomes })).run();
+  return outcomes;
+}
+
+async function cachedWalletPnl(env, addrs, minTs) {
+  const out = new Map();
+  for (let i = 0; i < addrs.length; i += 90) {
+    const chunk = addrs.slice(i, i + 90);
+    const rows = (await env.DB.prepare(
+      `SELECT * FROM pnl_cache WHERE ts > ? AND addr IN (${chunk.map(() => '?').join(',')})`
+    ).bind(minTs, ...chunk).all()).results;
+    for (const r of rows) out.set(r.addr, { ts: r.ts, d1: r.d1, w1: r.w1, m1: r.m1, al: r.al });
+  }
+  return out;
+}
+
+/** Fetch wallets' PnL from Polymarket and cache the complete rows. */
+async function refreshWallets(env, addrs, nowS) {
+  const got = new Map();
+  await pool(addrs, 16, async (a) => { got.set(a, { ts: nowS, ...(await walletPnl(a)) }); });
+  const rows = [...got].map(([a, p]) => [a, nowS, p.d1, p.w1, p.m1, p.al])
+    .filter((r) => r.slice(2).every((v) => v !== null));       // only cache complete rows
+  if (rows.length) await env.DB.batch(multiInsert(env.DB, 'INSERT OR REPLACE INTO pnl_cache (addr, ts, d1, w1, m1, al)', '', rows));
+  return got;
+}
+
+// Stale-while-revalidate: Polymarket computes a cold wallet's PnL series in
+// seconds, so a fully cold top-10 can take ~20s. Anything cached within
+// SERVE_STALE_S is served at once (refreshed in the background when older than
+// the fresh TTL); only never-seen wallets are fetched inline. The cron warmer
+// keeps tracked markets' top 10 cached, so most opens never wait.
+const SERVE_STALE_S = 2 * 3600;
+const RANKING_STALE_S = 3600;
+
+async function holdersPnl(env, url, ctx) {
   const cid = url.searchParams.get('cid') || '';
   const n = Number(url.searchParams.get('n') || 10);
   if (!/^0x[0-9a-fA-F]{64}$/.test(cid) || !N_CHOICES.includes(n)) return json({ error: 'bad_request' }, 400);
-  const db = env.DB;
   const nowS = Math.floor(Date.now() / 1000);
+  const bg = [];
 
-  // Holder ranking (top 50 per outcome) — cached per market.
-  let cached = await db.prepare('SELECT ts, body FROM holders_pnl_cache WHERE cid = ?').bind(cid).first();
-  let outcomes;
-  if (cached && nowS - cached.ts < MARKET_TTL_S) {
+  const cached = await env.DB.prepare('SELECT ts, body FROM holders_pnl_cache WHERE cid = ?').bind(cid).first();
+  let outcomes, rankedAt;
+  if (cached && nowS - cached.ts < RANKING_STALE_S) {
     outcomes = JSON.parse(cached.body).outcomes;
+    rankedAt = cached.ts;
+    if (nowS - cached.ts >= MARKET_TTL_S) bg.push(fetchRanking(env, cid, nowS));
   } else {
-    let tokens;
     try {
-      tokens = await getJSON(`${DATA_API}/holders?market=${cid}&limit=${HOLDERS_N}`);
+      outcomes = await fetchRanking(env, cid, nowS);
+      rankedAt = nowS;
     } catch (err) {
       console.warn('holders fetch failed:', err.message);
       if (!cached) return json({ error: 'upstream' }, 502);
-      tokens = null;
-    }
-    if (tokens) {
-      outcomes = tokens.map((t) => {
-        const holders = [...(t.holders || [])].sort((a, b) => b.amount - a.amount).slice(0, HOLDERS_N);
-        return {
-          oi: holders[0]?.outcomeIndex ?? null,
-          holders: holders.map((h) => ({ addr: h.proxyWallet.toLowerCase(), name: h.name || h.pseudonym || '', shares: h.amount })),
-        };
-      }).filter((o) => o.oi !== null).sort((a, b) => a.oi - b.oi);
-      await db.prepare('INSERT OR REPLACE INTO holders_pnl_cache (cid, ts, body) VALUES (?, ?, ?)')
-        .bind(cid, nowS, JSON.stringify({ outcomes })).run();
-      cached = { ts: nowS };
-    } else {
-      outcomes = JSON.parse(cached.body).outcomes;      // stale ranking beats no answer
+      outcomes = JSON.parse(cached.body).outcomes;        // stale ranking beats no answer
+      rankedAt = cached.ts;
     }
   }
 
-  // Account-wide PnL for the top-n wallets of each side: fresh cache rows, fetch the rest.
   for (const o of outcomes) o.holders = o.holders.slice(0, n);
   const addrs = [...new Set(outcomes.flatMap((o) => o.holders.map((h) => h.addr)))];
-  const pnl = new Map();
-  for (let i = 0; i < addrs.length; i += 90) {
-    const chunk = addrs.slice(i, i + 90);
-    const rows = (await db.prepare(
-      `SELECT * FROM pnl_cache WHERE ts > ? AND addr IN (${chunk.map(() => '?').join(',')})`
-    ).bind(nowS - WALLET_TTL_S, ...chunk).all()).results;
-    for (const r of rows) pnl.set(r.addr, { d1: r.d1, w1: r.w1, m1: r.m1, al: r.al });
-  }
+  const pnl = await cachedWalletPnl(env, addrs, nowS - SERVE_STALE_S);
   const missing = addrs.filter((a) => !pnl.has(a));
-  await pool(missing, 16, async (a) => { pnl.set(a, await walletPnl(a)); });
-  const fresh = missing.map((a) => [a, nowS, ...['d1', 'w1', 'm1', 'al'].map((k) => pnl.get(a)[k])])
-    .filter((r) => r.slice(2).every((v) => v !== null));   // only cache complete rows
-  if (fresh.length) await db.batch(multiInsert(db, 'INSERT OR REPLACE INTO pnl_cache (addr, ts, d1, w1, m1, al)', '', fresh));
+  if (missing.length) for (const [a, p] of await refreshWallets(env, missing, nowS)) pnl.set(a, p);
+  const stale = addrs.filter((a) => pnl.get(a)?.ts < nowS - WALLET_TTL_S);
+  if (stale.length) bg.push(refreshWallets(env, stale, nowS));
+  if (bg.length) ctx.waitUntil(Promise.allSettled(bg));
 
-  for (const o of outcomes) for (const h of o.holders) h.pnl = pnl.get(h.addr);
-  console.log(`holders-pnl ${cid.slice(0, 10)} n=${n} wallets=${addrs.length} fetched=${missing.length}`);
-  return json({ cid, n, rankedAt: cached.ts, outcomes }, 200, 60);
+  let asOf = nowS;
+  for (const o of outcomes) for (const h of o.holders) {
+    const p = pnl.get(h.addr);
+    if (p?.ts) asOf = Math.min(asOf, p.ts);
+    h.pnl = p ? { d1: p.d1, w1: p.w1, m1: p.m1, al: p.al } : null;
+  }
+  console.log(`holders-pnl ${cid.slice(0, 10)} n=${n} wallets=${addrs.length} inline=${missing.length} bg=${stale.length}`);
+  return json({ cid, n, rankedAt, asOf, outcomes }, 200, 60);
+}
+
+/** Cron: keep the top 10 of a few tracked markets warm per tick, oldest first. */
+const WARM_MARKETS_PER_TICK = 3;
+async function warmHoldersPnl(env) {
+  const nowS = Math.floor(Date.now() / 1000);
+  const due = (await env.DB.prepare(
+    `SELECT m.cid FROM (SELECT DISTINCT cid FROM markets WHERE status = 'active') m
+       LEFT JOIN holders_pnl_cache c ON c.cid = m.cid
+      WHERE c.ts IS NULL OR c.ts < ?
+      ORDER BY COALESCE(c.ts, 0) LIMIT ?`
+  ).bind(nowS - 30 * 60, WARM_MARKETS_PER_TICK).all()).results;
+  for (const { cid } of due) {
+    try {
+      const outcomes = await fetchRanking(env, cid, nowS);
+      const addrs = [...new Set(outcomes.flatMap((o) => o.holders.slice(0, 10).map((h) => h.addr)))];
+      const fresh = await cachedWalletPnl(env, addrs, nowS - WALLET_TTL_S);
+      await refreshWallets(env, addrs.filter((a) => !fresh.has(a)), nowS);
+    } catch (err) {
+      console.warn(`warm ${cid.slice(0, 10)} failed: ${err.message}`);
+    }
+  }
 }
 
 // ─── Read API ────────────────────────────────────────────────────────────────
@@ -477,15 +529,16 @@ export default {
         console.error(`${site}: ingest failed: ${err.stack || err.message}`);
       }
     }
+    try { await warmHoldersPnl(env); } catch (err) { console.error(`warm failed: ${err.message}`); }
   },
 
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (request.method !== 'GET') return json({ error: 'method' }, 405);
     if (url.pathname === '/history') return history(env, url);
     if (url.pathname === '/markets') return listMarkets(env, url);
     if (url.pathname === '/status') return status(env);
-    if (url.pathname === '/holders-pnl') return holdersPnl(env, url);
+    if (url.pathname === '/holders-pnl') return holdersPnl(env, url, ctx);
     return json({ error: 'not_found' }, 404);
   },
 };

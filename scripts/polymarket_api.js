@@ -136,15 +136,23 @@ export async function fetchWalletPositions(address, limit = 500, config = {}) {
   // The first page is kept as-is (its redeemables attribute REDEEM events in
   // recent changes); every live position is then paged in with
   // redeemable=false and merged by token id.
+  // Pages are fetched in parallel waves (a 6,900-position market maker is 14
+  // pages; sequential paging pushed the watch run past the dispatcher's
+  // 1-minute tick and halved the refresh cadence).
   const seen = new Set(data.map(p => p.asset));
   const maxPages = config.positions_max_pages || 30;
-  for (let page = 0, offset = 0; page < maxPages; page++, offset += limit) {
-    const live = (await fetchWithRetry(
-      `${DATA_API_BASE}/positions?user=${user}&limit=${limit}&offset=${offset}&redeemable=false`, {}, config)) || [];
-    for (const p of live) {
-      if (!seen.has(p.asset)) { seen.add(p.asset); data.push(slimPosition(p)); }
+  const WAVE = 4;
+  for (let page = 0; page < maxPages; page += WAVE) {
+    const offsets = Array.from({ length: Math.min(WAVE, maxPages - page) }, (_, i) => (page + i) * limit);
+    const pages = await Promise.all(offsets.map(offset => fetchWithRetry(
+      `${DATA_API_BASE}/positions?user=${user}&limit=${limit}&offset=${offset}&redeemable=false`, {}, config)
+      .then(r => r || [])));
+    for (const live of pages) {
+      for (const p of live) {
+        if (!seen.has(p.asset)) { seen.add(p.asset); data.push(slimPosition(p)); }
+      }
     }
-    if (live.length < limit) break;
+    if (pages.some(live => live.length < limit)) break;
   }
   return data;
 }
