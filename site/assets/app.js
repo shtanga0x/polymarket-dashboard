@@ -812,6 +812,7 @@ function showEventChanges(conditionId) {
 
   switchTab('changes');
   updateEventFilterBar();
+  openShareHistory(conditionId);
   renderChangesTable(0, 'all');
   document.getElementById('changes-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -822,6 +823,7 @@ function showEventChanges(conditionId) {
  */
 function clearEventFilter() {
   changesEventFilter = null;
+  closeShareHistory();
   updateEventFilterBar();
   const dF = parseInt(document.getElementById('delta-filter')?.value || 0);
   const tF = document.getElementById('time-filter')?.value || 'all';
@@ -1806,6 +1808,8 @@ async function loadData() {
     renderPortfolioSummary();
     renderPortfolioTable();
     renderChangesTable();
+    // New snapshot → the share history may have a fresh step.
+    if (shState.cid) loadShareHistory({ silent: true });
   } catch (error) {
     console.error('Failed to load data:', error);
     dataOffline = true;
@@ -1815,6 +1819,435 @@ async function loadData() {
   } finally {
     isLoading = false;
   }
+}
+
+// ============================================================
+// SHARE HISTORY (Recent Changes → single-market view)
+// ============================================================
+//
+// Shares held by the tracked traders in one market over time, per outcome.
+// Served by GET /api/share-history (site-router → pm-share-history worker),
+// which records every per-trader size change for markets that have been in
+// this site's top 200 — from first appearance until the market closes.
+// History rows are change-only, so each outcome total is a step function.
+
+const SH_RANGE_SECONDS = { '1d': 86400, '1w': 7 * 86400, '1m': 30 * 86400, max: null };
+// Categorical slots in fixed order, keyed by outcomeIndex (blue, orange, aqua, yellow).
+const SH_SERIES = {
+  light: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100'],
+  dark: ['#3987e5', '#d95926', '#199e70', '#c98500']
+};
+const SH_PAD = { top: 16, right: 92, bottom: 30, left: 64 };
+
+const shState = { cid: null, range: '1d', data: null, series: [], hidden: new Set(), hoverTs: null, reqId: 0 };
+
+function shTheme() {
+  const css = getComputedStyle(document.documentElement);
+  const v = name => css.getPropertyValue(name).trim();
+  const mode = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+  return {
+    mode,
+    bg: v('--bg-primary'), text: v('--text-primary'), text2: v('--text-secondary'),
+    muted: v('--text-muted'), grid: v('--border-color'), series: SH_SERIES[mode]
+  };
+}
+
+function shTraderLabel(addr) {
+  const t = (metadata?.traders || []).find(x => x.address === addr);
+  return t?.label || truncateAddress(addr);
+}
+
+function shFormatShares(v) {
+  const a = Math.abs(v);
+  if (a >= 1e6) return (v / 1e6).toFixed(a >= 1e7 ? 1 : 2) + 'M';
+  if (a >= 1e3) return (v / 1e3).toFixed(a >= 1e4 ? 1 : 2) + 'K';
+  return v.toFixed(0);
+}
+
+function shFormatTime(ts, withDate) {
+  const d = new Date(ts * 1000);
+  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (!withDate) return time;
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + (withDate === 'full' ? ' ' + time : '');
+}
+
+/** Replay change rows into per-outcome step series with the top holders at each step. */
+function shBuildSeries(data) {
+  const outcomes = new Set(Object.keys(data.market.outcomes || {}).map(Number));
+  for (const [oi] of data.baseline) outcomes.add(oi);
+  for (const [, oi] of data.rows) outcomes.add(oi);
+
+  const holdings = new Map([...outcomes].map(oi => [oi, new Map()]));
+  for (const [oi, tid, size] of data.baseline) holdings.get(oi).set(tid, size);
+
+  const snapshot = oi => {
+    const h = holdings.get(oi);
+    let total = 0;
+    for (const s of h.values()) total += s;
+    const top = [...h.entries()].filter(([, s]) => s > 0).sort((a, b) => b[1] - a[1]).slice(0, 3)
+      .map(([tid, s]) => [shTraderLabel(data.traders[tid]), s]);
+    return { total, top, holders: [...h.values()].filter(s => s > 0).length };
+  };
+
+  const points = new Map([...outcomes].map(oi => [oi, [{ ts: data.since, ...snapshot(oi) }]]));
+  let i = 0;
+  const rows = data.rows;
+  while (i < rows.length) {
+    const ts = rows[i][0];
+    const touched = new Set();
+    for (; i < rows.length && rows[i][0] === ts; i++) {
+      const [, oi, tid, size] = rows[i];
+      if (size > 0) holdings.get(oi).set(tid, size); else holdings.get(oi).delete(tid);
+      touched.add(oi);
+    }
+    for (const oi of touched) {
+      const pts = points.get(oi);
+      const p = { ts, ...snapshot(oi) };
+      if (pts.length && pts[pts.length - 1].ts === ts) pts[pts.length - 1] = p; else pts.push(p);
+    }
+  }
+  return [...outcomes].sort((a, b) => a - b).map(oi => ({
+    oi,
+    name: data.market.outcomes?.[oi] || `Outcome ${oi}`,
+    points: points.get(oi)
+  }));
+}
+
+/** Last point at or before ts (step-after semantics). */
+function shValueAt(points, ts) {
+  let lo = 0, hi = points.length - 1, ans = points[0];
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (points[mid].ts <= ts) { ans = points[mid]; lo = mid + 1; } else hi = mid - 1;
+  }
+  return ans;
+}
+
+function shNiceStep(span, count) {
+  const raw = span / count;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const norm = raw / mag;
+  return (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 2.5 ? 2.5 : norm <= 5 ? 5 : 10) * mag;
+}
+
+function shTimeTicks(t0, t1) {
+  const span = t1 - t0;
+  const steps = [300, 900, 1800, 3600, 2 * 3600, 3 * 3600, 6 * 3600, 12 * 3600, 86400, 2 * 86400, 7 * 86400, 14 * 86400, 30 * 86400];
+  const step = steps.find(s => span / s <= 7) || 30 * 86400;
+  const tzOffset = new Date().getTimezoneOffset() * 60;   // align day ticks to local midnight
+  const ticks = [];
+  for (let t = Math.ceil((t0 - tzOffset) / step) * step + tzOffset; t <= t1; t += step) ticks.push(t);
+  return { ticks, withDate: step >= 86400 ? 'date' : span > 86400 ? 'full' : false };
+}
+
+function shGeometry(width, height) {
+  const data = shState.data;
+  const visible = shState.series.filter(s => !shState.hidden.has(s.oi));
+  const t0 = data.since;
+  const t1 = Math.max(data.asof, data.since + 60);
+  // Vertical autoscale: min..max of the visible series over the shown period.
+  let min = Infinity, max = -Infinity;
+  for (const s of visible) for (const p of s.points) { min = Math.min(min, p.total); max = Math.max(max, p.total); }
+  if (!Number.isFinite(min)) { min = 0; max = 1; }
+  const pad = (max - min) * 0.08 || Math.max(Math.abs(max) * 0.05, 1);
+  const yStep = shNiceStep(max - min + 2 * pad, 5);
+  const y0 = Math.max(0, Math.floor((min - pad) / yStep) * yStep);
+  const y1 = Math.ceil((max + pad) / yStep) * yStep;
+  const plotW = width - SH_PAD.left - SH_PAD.right;
+  const plotH = height - SH_PAD.top - SH_PAD.bottom;
+  return {
+    visible, t0, t1, y0, y1, yStep, plotW, plotH,
+    x: t => SH_PAD.left + ((t - t0) / (t1 - t0)) * plotW,
+    y: v => SH_PAD.top + (1 - (v - y0) / (y1 - y0 || 1)) * plotH,
+    tAt: px => t0 + ((px - SH_PAD.left) / plotW) * (t1 - t0)
+  };
+}
+
+function shDraw(ctx, width, height, hoverTs, opaque = false) {
+  const theme = shTheme();
+  const g = shGeometry(width, height);
+  // Exports paint the surface (JPEG has no alpha — a cleared canvas turns black).
+  if (opaque) { ctx.fillStyle = theme.bg; ctx.fillRect(0, 0, width, height); }
+  else ctx.clearRect(0, 0, width, height);
+  ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+
+  // Grid + y labels (recessive)
+  ctx.strokeStyle = theme.grid;
+  ctx.fillStyle = theme.muted;
+  ctx.lineWidth = 1;
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  for (let v = g.y0; v <= g.y1 + g.yStep / 2; v += g.yStep) {
+    const y = Math.round(g.y(v)) + 0.5;
+    ctx.beginPath(); ctx.moveTo(SH_PAD.left, y); ctx.lineTo(SH_PAD.left + g.plotW, y); ctx.stroke();
+    ctx.fillText(shFormatShares(v), SH_PAD.left - 8, y);
+  }
+  // X labels
+  const { ticks, withDate } = shTimeTicks(g.t0, g.t1);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  for (const t of ticks) ctx.fillText(shFormatTime(t, withDate), g.x(t), SH_PAD.top + g.plotH + 8);
+
+  // Step lines, 2px, color by outcome slot
+  for (const s of g.visible) {
+    const color = theme.series[s.oi % theme.series.length];
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    s.points.forEach((p, i) => {
+      const x = g.x(Math.max(p.ts, g.t0)), y = g.y(p.total);
+      if (i === 0) ctx.moveTo(x, y);
+      else { ctx.lineTo(x, g.y(s.points[i - 1].total)); ctx.lineTo(x, y); }
+    });
+    const last = s.points[s.points.length - 1];
+    ctx.lineTo(g.x(g.t1), g.y(last.total));
+    ctx.stroke();
+  }
+
+  // Direct end labels (≤4 series), nudged apart so they never overlap
+  const labels = g.visible.map(s => {
+    const last = s.points[s.points.length - 1];
+    return { s, y: g.y(last.total), text: `${s.name} ${shFormatShares(last.total)}` };
+  }).sort((a, b) => a.y - b.y);
+  for (let i = 1; i < labels.length; i++) labels[i].y = Math.max(labels[i].y, labels[i - 1].y + 14);
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  for (const l of labels) {
+    const color = theme.series[l.s.oi % theme.series.length];
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(SH_PAD.left + g.plotW + 8, l.y, 3.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = theme.text2;
+    ctx.fillText(l.text, SH_PAD.left + g.plotW + 15, l.y);
+  }
+
+  // Hover crosshair + markers with a surface ring
+  if (hoverTs != null) {
+    const x = Math.round(g.x(hoverTs)) + 0.5;
+    ctx.strokeStyle = theme.muted;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(x, SH_PAD.top); ctx.lineTo(x, SH_PAD.top + g.plotH); ctx.stroke();
+    ctx.setLineDash([]);
+    for (const s of g.visible) {
+      const p = shValueAt(s.points, hoverTs);
+      ctx.fillStyle = theme.series[s.oi % theme.series.length];
+      ctx.strokeStyle = theme.bg;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(x, g.y(p.total), 4.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
+  }
+  return g;
+}
+
+function shRender() {
+  const canvas = document.getElementById('sh-canvas');
+  const plot = document.getElementById('sh-plot');
+  if (!canvas || !plot || !shState.data?.tracked) return;
+  const width = plot.clientWidth;
+  const height = plot.clientHeight;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.round(width * dpr);
+  canvas.height = Math.round(height * dpr);
+  canvas.style.width = width + 'px';
+  canvas.style.height = height + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  shDraw(ctx, width, height, shState.hoverTs);
+}
+
+function shRenderLegend() {
+  const legend = document.getElementById('sh-legend');
+  if (!legend) return;
+  const theme = shTheme();
+  legend.innerHTML = shState.series.map(s => `
+    <button type="button" class="sh-legend-item${shState.hidden.has(s.oi) ? ' off' : ''}" data-oi="${s.oi}"
+      title="Show/hide ${escapeHtml(s.name)} — the axis rescales to the visible lines">
+      <span class="sh-swatch" style="background:${theme.series[s.oi % theme.series.length]}"></span>${escapeHtml(s.name)}
+    </button>`).join('');
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function shShowMessage(msg) {
+  const empty = document.getElementById('sh-empty');
+  const canvas = document.getElementById('sh-canvas');
+  if (empty) { empty.textContent = msg; empty.hidden = !msg; }
+  if (canvas) canvas.style.visibility = msg ? 'hidden' : 'visible';
+  document.querySelectorAll('.sh-dl').forEach(b => { b.disabled = !!msg; });
+}
+
+function shUpdateSubtitle() {
+  const sub = document.getElementById('sh-sub');
+  const d = shState.data;
+  if (!sub) return;
+  if (!d?.tracked) { sub.textContent = ''; return; }
+  const since = new Date(d.market.firstTs * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const parts = [`tracked since ${since}`];
+  if (d.market.status === 'closed') {
+    const at = new Date(d.market.closedTs * 1000).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+    parts.push(`archived — ${d.market.closeReason === 'resolved' ? 'resolved' : 'closed'} ${at}`);
+  }
+  sub.textContent = parts.join(' · ');
+}
+
+async function loadShareHistory({ silent = false } = {}) {
+  const cid = shState.cid;
+  if (!cid) return;
+  const reqId = ++shState.reqId;
+  if (!silent) shShowMessage('Loading share history…');
+  let data;
+  try {
+    const res = await fetch(`/api/share-history?cid=${encodeURIComponent(cid)}&range=${shState.range}`,
+      { credentials: 'same-origin', cache: 'no-cache' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    data = await res.json();
+  } catch (err) {
+    if (reqId !== shState.reqId) return;
+    console.warn('share history failed:', err);
+    if (!silent || !shState.data) shShowMessage('Share history is unavailable right now.');
+    return;
+  }
+  if (reqId !== shState.reqId) return;   // a newer market/range request superseded this one
+  shState.data = data;
+  shUpdateSubtitle();
+  if (!data.tracked) {
+    shState.series = [];
+    shRenderLegend();
+    shShowMessage('Not tracked yet — share history is recorded for markets once they reach the top 200 by exposure, and then kept until the market closes.');
+    return;
+  }
+  shState.series = shBuildSeries(data);
+  shRenderLegend();
+  shShowMessage(shState.series.length ? '' : 'No tracked trader has held this market yet.');
+  shRender();
+}
+
+function openShareHistory(cid) {
+  const panel = document.getElementById('share-history');
+  if (!panel) return;
+  if (shState.cid !== cid) {
+    shState.cid = cid;
+    shState.data = null;
+    shState.series = [];
+    shState.hidden.clear();
+    shState.hoverTs = null;
+  }
+  panel.hidden = false;
+  loadShareHistory();
+}
+
+function closeShareHistory() {
+  const panel = document.getElementById('share-history');
+  if (panel) panel.hidden = true;
+  shState.cid = null;
+  shState.reqId++;
+}
+
+function shHideTip() {
+  const tip = document.getElementById('sh-tip');
+  if (tip) tip.hidden = true;
+  if (shState.hoverTs != null) { shState.hoverTs = null; shRender(); }
+}
+
+function shOnHover(ev) {
+  if (!shState.data?.tracked || !shState.series.length) return;
+  const plot = document.getElementById('sh-plot');
+  const tip = document.getElementById('sh-tip');
+  const rect = plot.getBoundingClientRect();
+  const px = ev.clientX - rect.left;
+  const g = shGeometry(rect.width, rect.height);
+  if (px < SH_PAD.left || px > SH_PAD.left + g.plotW || !g.visible.length) { shHideTip(); return; }
+  shState.hoverTs = Math.min(Math.max(g.tAt(px), g.t0), g.t1);
+  shRender();
+
+  const theme = shTheme();
+  const withDate = (g.t1 - g.t0) > 86400 ? 'full' : false;
+  tip.innerHTML = `<div class="sh-tip-time">${shFormatTime(shState.hoverTs, withDate || 'full')}</div>` +
+    g.visible.map(s => {
+      const p = shValueAt(s.points, shState.hoverTs);
+      const first = s.points[0].total;
+      const delta = p.total - first;
+      const deltaTxt = first || delta ? ` <span class="sh-tip-delta">${delta >= 0 ? '+' : '−'}${shFormatShares(Math.abs(delta))} vs start</span>` : '';
+      return `<div class="sh-tip-row"><span class="sh-swatch" style="background:${theme.series[s.oi % theme.series.length]}"></span>
+        <span class="sh-tip-name">${escapeHtml(s.name)}</span><strong>${formatShares(p.total)}</strong>${deltaTxt}</div>
+        <div class="sh-tip-holders">${p.holders} holder${p.holders === 1 ? '' : 's'}${p.top.length ? ' · ' + p.top.map(([n, v]) => `${escapeHtml(n)} ${shFormatShares(v)}`).join(', ') : ''}</div>`;
+    }).join('');
+  tip.hidden = false;
+  const x = g.x(shState.hoverTs);
+  const tipW = tip.offsetWidth;
+  tip.style.left = (x + 14 + tipW > rect.width ? x - 14 - tipW : x + 14) + 'px';
+  tip.style.top = SH_PAD.top + 'px';
+}
+
+/** Re-draw the chart off-screen with a title band and an opaque background, then save it. */
+function downloadShareHistory(format) {
+  const d = shState.data;
+  const plot = document.getElementById('sh-plot');
+  if (!d?.tracked || !plot) return;
+  const theme = shTheme();
+  const width = plot.clientWidth, chartH = plot.clientHeight, headH = 58;
+  const scale = 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = width * scale;
+  canvas.height = (chartH + headH) * scale;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(scale, scale);
+  ctx.fillStyle = theme.bg;
+  ctx.fillRect(0, 0, width, chartH + headH);
+
+  const rangeLabel = { '1d': '1 day', '1w': '1 week', '1m': '1 month', max: 'since tracking start' }[shState.range];
+  ctx.fillStyle = theme.text;
+  ctx.font = '600 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  ctx.textBaseline = 'top';
+  ctx.textAlign = 'left';
+  ctx.fillText(d.market.title || 'Market', 16, 12, width - 32);
+  ctx.fillStyle = theme.text2;
+  ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  const legend = shGeometry(width, chartH).visible.map(s => s.name).join(' / ');
+  ctx.fillText(`Shares held by tracked ${SITE.siteName} traders · ${legend} · ${rangeLabel} · as of ${new Date(d.asof * 1000).toLocaleString()}`, 16, 33, width - 32);
+
+  ctx.save();
+  ctx.translate(0, headH);
+  shDraw(ctx, width, chartH, null, true);
+  ctx.restore();
+
+  const ext = format === 'jpeg' ? 'jpg' : 'png';
+  const name = `${SITE.siteId}_shares_${(d.market.slug || d.market.cid.slice(0, 10)).slice(0, 60)}_${shState.range}.${ext}`;
+  const url = canvas.toDataURL(`image/${format}`, 0.92);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+function initShareHistory() {
+  document.querySelectorAll('.sh-range').forEach(btn => btn.addEventListener('click', () => {
+    if (btn.dataset.range === shState.range) return;
+    shState.range = btn.dataset.range;
+    document.querySelectorAll('.sh-range').forEach(b => b.classList.toggle('active', b === btn));
+    loadShareHistory();
+  }));
+  document.querySelectorAll('.sh-dl').forEach(btn =>
+    btn.addEventListener('click', () => downloadShareHistory(btn.dataset.format)));
+  document.getElementById('sh-legend')?.addEventListener('click', ev => {
+    const item = ev.target.closest('.sh-legend-item');
+    if (!item) return;
+    const oi = Number(item.dataset.oi);
+    // Never hide the last visible line.
+    if (!shState.hidden.has(oi) && shState.hidden.size >= shState.series.length - 1) return;
+    shState.hidden.has(oi) ? shState.hidden.delete(oi) : shState.hidden.add(oi);
+    shRenderLegend();
+    shRender();
+  });
+  const plot = document.getElementById('sh-plot');
+  plot?.addEventListener('mousemove', shOnHover);
+  plot?.addEventListener('mouseleave', shHideTip);
+  if (plot && 'ResizeObserver' in window) new ResizeObserver(() => shRender()).observe(plot);
 }
 
 // ============================================================
@@ -1835,6 +2268,8 @@ function toggleTheme() {
   localStorage.setItem(THEME_STORAGE_KEY, next);
   const btn = document.getElementById('theme-toggle');
   if (btn) btn.textContent = next === 'dark' ? '☀' : '🌙';
+  shRenderLegend();
+  shRender();
 }
 
 /**
@@ -1927,6 +2362,7 @@ function init() {
   initUpdateTrigger();
   initChecker();
   initFloatingTooltip();
+  initShareHistory();
 
   // Timers are created exactly once here — never re-created by loadData().
   startAutoReload();

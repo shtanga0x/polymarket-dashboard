@@ -1,0 +1,60 @@
+-- pm-share-history D1 schema. Change-only share history for markets that have
+-- appeared in a site's top-200 portfolio rows. Apply with:
+--   npx wrangler d1 execute pm-share-history --remote --file schema.sql
+
+-- One row per (site, market). Tracking starts the first time the market shows
+-- up in the site's top 200 and never restarts: once closed it stays archived.
+CREATE TABLE IF NOT EXISTS markets (
+  id           INTEGER PRIMARY KEY,
+  site         TEXT    NOT NULL,           -- 'core' | 'watch'
+  cid          TEXT    NOT NULL,           -- conditionId
+  title        TEXT,
+  slug         TEXT,
+  event_slug   TEXT,
+  end_date     TEXT,
+  outcomes     TEXT,                       -- JSON {"<outcomeIndex>": "<name>"}
+  status       TEXT    NOT NULL DEFAULT 'active',  -- 'active' | 'closed'
+  close_reason TEXT,                       -- 'resolved' (redeemable) | 'closed' (Gamma)
+  first_ts     INTEGER NOT NULL,           -- unix s, first snapshot tracked
+  closed_ts    INTEGER,
+  UNIQUE (site, cid)
+);
+CREATE INDEX IF NOT EXISTS markets_site_status ON markets (site, status);
+
+-- Trader address dictionary (keeps history rows narrow).
+CREATE TABLE IF NOT EXISTS traders (
+  id   INTEGER PRIMARY KEY,
+  addr TEXT NOT NULL UNIQUE
+);
+
+-- The archive: one row whenever a trader's share count on a tracked outcome
+-- CHANGES (including the baseline at tracking start and 0 on a full exit).
+-- The holding is a step function — the size holds until the next row.
+CREATE TABLE IF NOT EXISTS holdings (
+  mid  INTEGER NOT NULL,
+  oi   INTEGER NOT NULL,
+  tid  INTEGER NOT NULL,
+  ts   INTEGER NOT NULL,
+  size REAL    NOT NULL,
+  PRIMARY KEY (mid, oi, tid, ts)
+) WITHOUT ROWID;
+
+-- Latest known size per tracked (market, outcome, trader) — the diff base.
+-- Rows are dropped when their market closes; `holdings` keeps the history.
+CREATE TABLE IF NOT EXISTS current (
+  mid  INTEGER NOT NULL,
+  oi   INTEGER NOT NULL,
+  tid  INTEGER NOT NULL,
+  size REAL    NOT NULL,
+  PRIMARY KEY (mid, oi, tid)
+) WITHOUT ROWID;
+
+-- Per-site ingest cursor: last snapshot processed + last Gamma closed-check.
+CREATE TABLE IF NOT EXISTS cursors (
+  site       TEXT PRIMARY KEY,
+  snapshot   TEXT,
+  ts         INTEGER,                      -- data time of that snapshot
+  gamma_ts   INTEGER,
+  ingests    INTEGER NOT NULL DEFAULT 0,
+  rows_total INTEGER NOT NULL DEFAULT 0
+);

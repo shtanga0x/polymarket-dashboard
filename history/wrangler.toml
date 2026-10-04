@@ -1,0 +1,30 @@
+name = "pm-share-history"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+# No public route: the dashboards reach the read API through the
+# polymarket-site-router service binding (behind the member gate).
+workers_dev = false
+
+[triggers]
+# Every minute; each tick ingests a site only when its metadata.json points at a
+# NEW snapshot, so the effective sample rate = the data pipeline's (~90s avg).
+crons = ["* * * * *"]
+
+[[r2_buckets]]
+binding = "DATA_BUCKET"
+bucket_name = "polymarket-data"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "pm-share-history"
+database_id = "60acad9f-de0f-4343-a207-19d3cfc74bf0"
+
+[limits]
+cpu_ms = 5000
+
+[observability]
+enabled = true
+
+[[tail_consumers]]
+service = "shtanga-tail-alerts"

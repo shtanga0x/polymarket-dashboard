@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/style.css?v=unified-20261002">
+  <link rel="stylesheet" href="assets/style.css?v=unified-20261004">
 </head>
 <body>
   <div class="top-shell">
@@ -171,6 +171,32 @@
       <div id="event-filter-bar" class="event-filter-bar" style="display: none;">
         <span class="event-filter-label">Showing recent changes for: <strong id="event-filter-name"></strong></span>
         <button id="clear-event-filter" type="button" class="filter-btn clear-filter-btn">✕ Clear filters</button>
+      </div>
+
+      <!-- Share history for the market picked via the Portfolio ↗ arrow -->
+      <div id="share-history" class="share-history" hidden>
+        <div class="sh-head">
+          <div class="sh-heading">
+            <h3 class="sh-title">Shares held by tracked traders</h3>
+            <span id="sh-sub" class="sh-sub"></span>
+          </div>
+          <div class="sh-controls">
+            <div class="sh-ranges" role="group" aria-label="Time range">
+              <button type="button" class="sh-range active" data-range="1d">1D</button>
+              <button type="button" class="sh-range" data-range="1w">1W</button>
+              <button type="button" class="sh-range" data-range="1m">1M</button>
+              <button type="button" class="sh-range" data-range="max">Max</button>
+            </div>
+            <button type="button" class="filter-btn sh-dl" data-format="png" title="Download the chart as PNG">⤓ PNG</button>
+            <button type="button" class="filter-btn sh-dl" data-format="jpeg" title="Download the chart as JPG">⤓ JPG</button>
+          </div>
+        </div>
+        <div id="sh-legend" class="sh-legend"></div>
+        <div id="sh-plot" class="sh-plot">
+          <canvas id="sh-canvas" aria-label="Shares held over time"></canvas>
+          <div id="sh-tip" class="sh-tip" hidden></div>
+          <div id="sh-empty" class="sh-empty" hidden></div>
+        </div>
       </div>
 
       <div class="table-container">
@@ -408,6 +434,6 @@
   </footer>
 
   <script src="assets/site-config.js"></script>
-  <script src="assets/app.js?v=unified-20261002"></script>
+  <script src="assets/app.js?v=unified-20261004"></script>
 </body>
 </html>

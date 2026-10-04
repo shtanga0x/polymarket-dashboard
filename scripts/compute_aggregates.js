@@ -592,7 +592,8 @@ export function aggregatePortfolios(traderPortfolios, config, activity = [], dat
           weightedAvgPriceSum: 0,
           weightedAvgSize: 0,
           totalSize: 0,
-          curPrice: 0
+          curPrice: 0,
+          redeemable: false
         });
       }
 
@@ -626,6 +627,9 @@ export function aggregatePortfolios(traderPortfolios, config, activity = [], dat
       if (Number.isFinite(curPrice) && curPrice > 0) {
         agg.curPrice = curPrice;
       }
+      // Resolved market (a holder can redeem) — the share-history worker stops
+      // tracking a market the moment this appears.
+      if (pos.redeemable) agg.redeemable = true;
     }
   }
 
@@ -689,6 +693,7 @@ export function aggregatePortfolios(traderPortfolios, config, activity = [], dat
       avgEntry: Math.round(avgEntry * 100) / 100,
       curPrice: Math.round(curPrice * 100) / 100,
       priceChangePct: Math.round(priceChangePct * 10) / 10,
+      ...(agg.redeemable ? { redeemable: true } : {}),
       // Sparse: only positions with activity in the last week carry this.
       ...(windowChangesMap.has(key)
         ? { windowChanges: serializeWindowChanges(windowChangesMap.get(key)) }
@@ -723,8 +728,32 @@ export function aggregatePortfolios(traderPortfolios, config, activity = [], dat
     top5Share = positions.slice(0, 5).reduce((sum, p) => sum + p.totalExposure, 0) / totalExposure;
   }
 
+  // Live outcomes that fall under min_usd_filter (typically the cheap side of a
+  // lopsided market — 50k shares at 0.1c is $50) are dropped from `positions`
+  // but their share counts still matter to the share-history worker: without
+  // them a tracked market's cheap side would read as "everyone sold". Compact
+  // form [conditionId, outcomeIndex, [[address, size], ...]] keeps it ~5% of
+  // the file. Resolved (redeemable) leftovers are skipped — they are not live.
+  const minUsd = config.min_usd_filter || 0;
+  const holdingsTail = positions
+    .filter(p => p.totalExposure < minUsd && !p.redeemable)
+    .map(p => [
+      p.conditionId,
+      p.outcomeIndex,
+      p.traders.map(t => [t.address, Math.round(t.size * 100) / 100])
+    ]);
+
+  // Traders whose fetch failed this run have NO positions in the aggregate.
+  // The share-history worker must carry their last known holdings forward
+  // instead of recording a phantom exit.
+  const failedTraders = Object.entries(traderPortfolios)
+    .filter(([, p]) => !p.fetchSuccess)
+    .map(([addr]) => addr);
+
   return {
-    positions: positions.filter(p => p.totalExposure >= (config.min_usd_filter || 0)),
+    positions: positions.filter(p => p.totalExposure >= minUsd),
+    holdingsTail,
+    failedTraders,
     summary: {
       totalExposure,
       totalSize: Math.round(totalSize * 10000) / 10000,
