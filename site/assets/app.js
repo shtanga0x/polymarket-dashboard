@@ -1837,7 +1837,7 @@ const SH_SERIES = {
   light: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100'],
   dark: ['#3987e5', '#d95926', '#199e70', '#c98500']
 };
-const SH_PAD = { top: 16, right: 92, bottom: 30, left: 64 };
+const SH_PAD = { top: 16, right: 104, bottom: 34, left: 72 };
 
 const shState = { cid: null, range: '1d', data: null, series: [], hidden: new Set(), hoverTs: null, reqId: 0 };
 
@@ -1969,18 +1969,19 @@ function shDraw(ctx, width, height, hoverTs, opaque = false) {
   // Exports paint the surface so the saved image isn't transparent.
   if (opaque) { ctx.fillStyle = theme.bg; ctx.fillRect(0, 0, width, height); }
   else ctx.clearRect(0, 0, width, height);
-  ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  const tickFont = '600 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  ctx.font = tickFont;
 
-  // Grid + y labels (recessive)
+  // Grid (recessive) + bold y tick labels
   ctx.strokeStyle = theme.grid;
-  ctx.fillStyle = theme.muted;
+  ctx.fillStyle = theme.text2;
   ctx.lineWidth = 1;
   ctx.textAlign = 'right';
   ctx.textBaseline = 'middle';
   for (let v = g.y0; v <= g.y1 + g.yStep / 2; v += g.yStep) {
     const y = Math.round(g.y(v)) + 0.5;
     ctx.beginPath(); ctx.moveTo(SH_PAD.left, y); ctx.lineTo(SH_PAD.left + g.plotW, y); ctx.stroke();
-    ctx.fillText(shFormatShares(v), SH_PAD.left - 8, y);
+    ctx.fillText(shFormatShares(v), SH_PAD.left - 10, y);
   }
   // X labels
   const { ticks, withDate } = shTimeTicks(g.t0, g.t1);
@@ -2006,11 +2007,12 @@ function shDraw(ctx, width, height, hoverTs, opaque = false) {
   }
 
   // Direct end labels (≤4 series), nudged apart so they never overlap
+  ctx.font = '600 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
   const labels = g.visible.map(s => {
     const last = s.points[s.points.length - 1];
     return { s, y: g.y(last.total), text: `${s.name} ${shFormatShares(last.total)}` };
   }).sort((a, b) => a.y - b.y);
-  for (let i = 1; i < labels.length; i++) labels[i].y = Math.max(labels[i].y, labels[i - 1].y + 14);
+  for (let i = 1; i < labels.length; i++) labels[i].y = Math.max(labels[i].y, labels[i - 1].y + 16);
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   for (const l of labels) {
