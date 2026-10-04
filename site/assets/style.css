@@ -1362,3 +1362,14 @@ th.sortable.sorted {
   .sh-body { flex-direction: column; }
   .hp-card { flex-basis: auto; }
 }
+
+/* Chart toolbar: legend left, range + download right — above the chart only */
+.sh-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.4rem;
+}
+.sh-toolbar .sh-legend { margin-bottom: 0; }

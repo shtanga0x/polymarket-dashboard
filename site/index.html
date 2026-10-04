@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/style.css?v=unified-20261004g">
+  <link rel="stylesheet" href="assets/style.css?v=unified-20261004h">
 </head>
 <body>
   <div class="top-shell">
@@ -180,19 +180,21 @@
             <h3 class="sh-title">Shares held by tracked traders</h3>
             <span id="sh-sub" class="sh-sub"></span>
           </div>
-          <div class="sh-controls">
-            <div class="sh-ranges" role="group" aria-label="Time range">
-              <button type="button" class="sh-range active" data-range="1d">1D</button>
-              <button type="button" class="sh-range" data-range="1w">1W</button>
-              <button type="button" class="sh-range" data-range="1m">1M</button>
-              <button type="button" class="sh-range" data-range="max">Max</button>
-            </div>
-            <button type="button" class="filter-btn sh-dl" title="Download the chart as PNG">⤓ PNG</button>
-          </div>
         </div>
         <div class="sh-body">
           <div class="sh-main">
-            <div id="sh-legend" class="sh-legend"></div>
+            <div class="sh-toolbar">
+              <div id="sh-legend" class="sh-legend"></div>
+              <div class="sh-controls">
+                <div class="sh-ranges" role="group" aria-label="Time range">
+                  <button type="button" class="sh-range active" data-range="1d">1D</button>
+                  <button type="button" class="sh-range" data-range="1w">1W</button>
+                  <button type="button" class="sh-range" data-range="1m">1M</button>
+                  <button type="button" class="sh-range" data-range="max">Max</button>
+                </div>
+                <button type="button" class="filter-btn sh-dl" title="Download the chart as PNG">⤓ PNG</button>
+              </div>
+            </div>
             <div id="sh-plot" class="sh-plot">
               <canvas id="sh-canvas" aria-label="Shares held over time"></canvas>
               <div id="sh-tip" class="sh-tip" hidden></div>
@@ -450,6 +452,6 @@
   </footer>
 
   <script src="assets/site-config.js"></script>
-  <script src="assets/app.js?v=unified-20261004g"></script>
+  <script src="assets/app.js?v=unified-20261004h"></script>
 </body>
 </html>
