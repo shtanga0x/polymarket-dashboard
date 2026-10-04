@@ -1966,7 +1966,7 @@ function shGeometry(width, height) {
 function shDraw(ctx, width, height, hoverTs, opaque = false) {
   const theme = shTheme();
   const g = shGeometry(width, height);
-  // Exports paint the surface (JPEG has no alpha — a cleared canvas turns black).
+  // Exports paint the surface so the saved image isn't transparent.
   if (opaque) { ctx.fillStyle = theme.bg; ctx.fillRect(0, 0, width, height); }
   else ctx.clearRect(0, 0, width, height);
   ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
@@ -2183,7 +2183,7 @@ function shOnHover(ev) {
 }
 
 /** Re-draw the chart off-screen with a title band and an opaque background, then save it. */
-function downloadShareHistory(format) {
+function downloadShareHistory() {
   const d = shState.data;
   const plot = document.getElementById('sh-plot');
   if (!d?.tracked || !plot) return;
@@ -2214,9 +2214,8 @@ function downloadShareHistory(format) {
   shDraw(ctx, width, chartH, null, true);
   ctx.restore();
 
-  const ext = format === 'jpeg' ? 'jpg' : 'png';
-  const name = `${SITE.siteId}_shares_${(d.market.slug || d.market.cid.slice(0, 10)).slice(0, 60)}_${shState.range}.${ext}`;
-  const url = canvas.toDataURL(`image/${format}`, 0.92);
+  const name = `${SITE.siteId}_shares_${(d.market.slug || d.market.cid.slice(0, 10)).slice(0, 60)}_${shState.range}.png`;
+  const url = canvas.toDataURL('image/png');
   const a = document.createElement('a');
   a.href = url;
   a.download = name;
@@ -2233,7 +2232,7 @@ function initShareHistory() {
     loadShareHistory();
   }));
   document.querySelectorAll('.sh-dl').forEach(btn =>
-    btn.addEventListener('click', () => downloadShareHistory(btn.dataset.format)));
+    btn.addEventListener('click', () => downloadShareHistory()));
   document.getElementById('sh-legend')?.addEventListener('click', ev => {
     const item = ev.target.closest('.sh-legend-item');
     if (!item) return;
