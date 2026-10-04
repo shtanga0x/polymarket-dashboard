@@ -2087,7 +2087,7 @@ function shUpdateSubtitle() {
   if (!sub) return;
   if (!d?.tracked) { sub.textContent = ''; return; }
   const since = new Date(d.market.firstTs * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-  const parts = [`tracked since ${since}`];
+  const parts = [`history since ${since}`];
   if (d.market.status === 'closed') {
     const at = new Date(d.market.closedTs * 1000).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
     parts.push(`archived — ${d.market.closeReason === 'resolved' ? 'resolved' : 'closed'} ${at}`);
