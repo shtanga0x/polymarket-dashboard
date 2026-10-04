@@ -2423,10 +2423,23 @@ async function fetchUsdcBalance(address) {
  * Fetch positions for a wallet from Polymarket API (null-safe: always an array)
  */
 async function fetchCheckerPositions(address) {
-  const url = `${DATA_API_BASE}/positions?user=${address.toLowerCase()}&limit=500`;
-  const response = await fetch(url);
-  if (!response.ok) throw new Error('Failed to fetch positions');
-  return (await response.json()) || [];
+  const user = address.toLowerCase();
+  const get = async (url) => {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Failed to fetch positions');
+    return (await response.json()) || [];
+  };
+  const data = await get(`${DATA_API_BASE}/positions?user=${user}&limit=500`);
+  if (data.length < 500) return data;
+  // Full page → more than 500 positions, the first page mostly resolved dust.
+  // Page in every live position (same rule as the server pipeline).
+  const seen = new Set(data.map(p => p.asset));
+  for (let offset = 0; offset < 15000; offset += 500) {
+    const live = await get(`${DATA_API_BASE}/positions?user=${user}&limit=500&offset=${offset}&redeemable=false`);
+    for (const p of live) if (!seen.has(p.asset)) { seen.add(p.asset); data.push(p); }
+    if (live.length < 500) break;
+  }
+  return data;
 }
 
 /**

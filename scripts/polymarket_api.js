@@ -115,10 +115,38 @@ async function fetchWithRetry(url, options = {}, config = {}) {
  * @param {object} config - Config object
  * @returns {Promise<Array>} Array of position objects
  */
+// Fields the pipeline reads from a position (aggregation + exposure). Paged-in
+// extras are slimmed to these: a market-making wallet can add ~6,400 positions,
+// and the full 28-field objects cost ~1 KB each in trader_portfolios.json.
+const SLIM_POSITION_FIELDS = [
+  'asset', 'conditionId', 'size', 'avgPrice', 'currentValue', 'cashPnl', 'curPrice',
+  'redeemable', 'title', 'slug', 'icon', 'eventSlug', 'outcome', 'outcomeIndex', 'endDate'
+];
+const slimPosition = p => Object.fromEntries(SLIM_POSITION_FIELDS.filter(k => p[k] !== undefined).map(k => [k, p[k]]));
+
 export async function fetchWalletPositions(address, limit = 500, config = {}) {
-  const url = `${DATA_API_BASE}/positions?user=${address.toLowerCase()}&limit=${limit}`;
-  const data = await fetchWithRetry(url, {}, config);
-  return data || [];
+  const user = address.toLowerCase();
+  const url = `${DATA_API_BASE}/positions?user=${user}&limit=${limit}`;
+  const data = (await fetchWithRetry(url, {}, config)) || [];
+  if (data.length < limit) return data;
+
+  // A full page means the wallet holds more than `limit` positions, and that
+  // first page is mostly resolved (redeemable) dust — 15 tracked wallets
+  // (2026-10-04) had up to 6,400 LIVE positions (~$611k) silently cut off.
+  // The first page is kept as-is (its redeemables attribute REDEEM events in
+  // recent changes); every live position is then paged in with
+  // redeemable=false and merged by token id.
+  const seen = new Set(data.map(p => p.asset));
+  const maxPages = config.positions_max_pages || 30;
+  for (let page = 0, offset = 0; page < maxPages; page++, offset += limit) {
+    const live = (await fetchWithRetry(
+      `${DATA_API_BASE}/positions?user=${user}&limit=${limit}&offset=${offset}&redeemable=false`, {}, config)) || [];
+    for (const p of live) {
+      if (!seen.has(p.asset)) { seen.add(p.asset); data.push(slimPosition(p)); }
+    }
+    if (live.length < limit) break;
+  }
+  return data;
 }
 
 /**
