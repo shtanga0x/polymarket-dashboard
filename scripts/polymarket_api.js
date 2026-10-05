@@ -36,6 +36,32 @@ export class HttpError extends Error {
 }
 
 /**
+ * Client-side rate limits per data-api path (sliding window). Without proxies
+ * every request leaves from one runner IP, and GitHub's datacenter IPs get
+ * HTTP 429 on /positions at ~150 calls in a couple of seconds (2026-10-05 A/B
+ * test; a residential IP was not limited at the same burst). The watch site
+ * makes ~151 /positions calls per run (131 wallets + pages for >500-position
+ * wallets), so they are paced to stay under the limit instead of tripping it.
+ */
+const RATE_LIMITS = [
+  { match: '/positions', max: 120, windowMs: 10_000 },
+];
+const rateWindows = new Map();
+
+async function rateLimit(url) {
+  const rule = RATE_LIMITS.find(r => url.includes(r.match));
+  if (!rule) return;
+  let stamps = rateWindows.get(rule.match);
+  if (!stamps) { stamps = []; rateWindows.set(rule.match, stamps); }
+  for (;;) {
+    const now = Date.now();
+    while (stamps.length && now - stamps[0] >= rule.windowMs) stamps.shift();
+    if (stamps.length < rule.max) { stamps.push(now); return; }
+    await sleep(rule.windowMs - (now - stamps[0]) + 25);
+  }
+}
+
+/**
  * Fetch with retry, exponential backoff, and proxy rotation.
  * A fresh proxy agent is picked for each attempt (round-robin); when no
  * proxies are configured the request is made directly.
@@ -51,6 +77,7 @@ async function fetchWithRetry(url, options = {}, config = {}) {
   const baseDelay = config.retry_base_delay_ms || 1000;
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
+    await rateLimit(url);
     // Get a fresh proxy agent each attempt (round-robin rotation)
     const agent = getProxyAgent();
     // Per-attempt timeout: a dead proxy connection otherwise hangs until the
@@ -70,8 +97,10 @@ async function fetchWithRetry(url, options = {}, config = {}) {
       const response = await fetch(url, fetchOptions);
 
       if (response.status === 429) {
-        // Rate limited - wait and retry
-        const delay = baseDelay * Math.pow(2, attempt);
+        // Rate limited - wait and retry. Honour Retry-After; otherwise wait at
+        // least a few seconds so a 10-s window can actually drain.
+        const retryAfter = parseInt(response.headers.get('retry-after') || '', 10);
+        const delay = Number.isFinite(retryAfter) ? retryAfter * 1000 : Math.max(3000, baseDelay * Math.pow(2, attempt + 1));
         console.warn(`Rate limited on ${url}, waiting ${delay}ms before retry...`);
         await sleep(delay);
         continue;
