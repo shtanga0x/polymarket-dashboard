@@ -1,0 +1,67 @@
+name: Proxy A/B test (no upload)
+
+# Manual experiment: does the data pipeline still need the PROXIES rotation on
+# GitHub-hosted runners? Runs the same fetch for both sites, direct vs proxied,
+# side by side. Writes only to the runner's disk — NOTHING is uploaded to R2,
+# so production boards are unaffected. Remove once the question is settled.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        site: [core, watch]
+        mode: [direct, proxy]
+    env:
+      SITE: ${{ matrix.site }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout private trader list
+        uses: actions/checkout@v4
+        with:
+          repository: shtanga0x/polymarket-traders
+          ssh-key: ${{ secrets.TRADERS_DEPLOY_KEY }}
+          path: _traders
+
+      - name: Stage trader list
+        run: mkdir -p data && cp _traders/traders.csv data/traders.csv
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Fetch (${{ matrix.mode }})
+        id: fetch
+        continue-on-error: true
+        env:
+          NODE_OPTIONS: '--max-old-space-size=1024'
+          PROXIES: ${{ matrix.mode == 'proxy' && secrets.PROXIES || '' }}
+        run: |
+          echo "runner IP: $(curl -s https://api.ipify.org)"
+          start=$(date +%s)
+          node scripts/fetch_data.js --site "$SITE" > fetch.log 2>&1 || echo "exit=$?" >> fetch.log
+          echo "SECONDS_TAKEN=$(( $(date +%s) - start ))" >> fetch.log
+          tail -25 fetch.log
+
+      - name: Summary
+        if: always()
+        run: |
+          f=fetch.log
+          echo "== ${{ matrix.site }} / ${{ matrix.mode }} =="
+          grep -E "SECONDS_TAKEN|Traders fetched|Traders tracked|Markets held|exit=" "$f" || true
+          echo "429 rate-limited:  $(grep -c 'Rate limited' "$f")"
+          echo "403 blocked:       $(grep -c 'Blocked (403)' "$f")"
+          echo "5xx server errors: $(grep -c 'Server error' "$f")"
+          echo "request failures:  $(grep -c 'Request failed' "$f")"
+          echo "traders failed:    $(grep -c 'Failed to fetch for' "$f")"
+          echo "-- sample errors --"
+          grep -E "Rate limited|Blocked|Server error|Request failed|Failed to fetch" "$f" | sed -E 's#https://[^ ,]*#URL#g' | sort | uniq -c | sort -rn | head -8 || true
