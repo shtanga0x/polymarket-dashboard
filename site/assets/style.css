@@ -1373,3 +1373,11 @@ th.sortable.sorted {
   margin-bottom: 0.4rem;
 }
 .sh-toolbar .sh-legend { margin-bottom: 0; }
+
+/* Panel heading = market name; chart caption sits in the toolbar; legend hugs the y-axis */
+.sh-market { font-size: 1.05rem; font-weight: 700; line-height: 1.35; }
+.sh-market a { color: var(--text-primary); }
+.sh-toolbar .sh-heading { min-width: 0; }
+.sh-toolbar .sh-title { font-size: 0.9rem; }
+.sh-legend { margin: 0 0 -0.35rem; padding-left: 0.25rem; min-height: 0; }
+.sh-legend-item { font-size: 0.78rem; padding: 0; }

@@ -2117,6 +2117,7 @@ async function loadShareHistory({ silent = false } = {}) {
   if (reqId !== shState.reqId) return;   // a newer market/range request superseded this one
   shState.data = data;
   shUpdateSubtitle();
+  shSetMarketTitle(cid);
   if (hpState.data) hpRender();          // outcome names now known
   if (!data.tracked) {
     shState.series = [];
@@ -2130,9 +2131,23 @@ async function loadShareHistory({ silent = false } = {}) {
   shRender();
 }
 
+/** Panel heading = the exact market being studied, linked to Polymarket. */
+function shSetMarketTitle(cid) {
+  const el = document.getElementById('sh-market');
+  if (!el) return;
+  const m = shState.data?.market;
+  const pos = (aggregatedPortfolio?.positions || []).find(p => p.conditionId === cid);
+  const change = (recentChanges?.changes || []).find(c => c.conditionId === cid);
+  el.textContent = m?.title || getMarketTitle(cid);
+  const eventSlug = m?.eventSlug || pos?.eventSlug || change?.eventSlug;
+  const slug = m?.slug || pos?.slug || change?.marketSlug;
+  el.href = eventSlug ? polymarketUrl('/event/' + eventSlug) : slug ? polymarketUrl('/market/' + slug) : '#';
+}
+
 function openShareHistory(cid) {
   const panel = document.getElementById('share-history');
   if (!panel) return;
+  shSetMarketTitle(cid);
   if (shState.cid !== cid) {
     shState.cid = cid;
     shState.data = null;
