@@ -2412,7 +2412,12 @@ function hpProgressText(r) {
   if (r.pausedFor) parts.push(`paused — Polymarket rate limit, resuming in ${r.pausedFor}s`);
   else {
     if (r.ahead) parts.push(`${r.ahead} wallets from other refreshes ahead in the queue`);
-    if (r.etaS) parts.push(`~${r.etaS < 90 ? r.etaS + 's' : Math.round(r.etaS / 60) + ' min'} left`);
+    // ETA from this refresh's own measured pace once it has one (Polymarket's
+    // recompute speed varies a lot); the server's fixed-rate guess before that.
+    const elapsed = r.startedAt ? Date.now() / 1000 - r.startedAt : 0;
+    const recomputed = r.done - (r.alreadyFresh || 0);
+    const eta = recomputed >= 2 && elapsed > 10 ? Math.round((r.total - r.done) * elapsed / recomputed) : r.etaS;
+    if (eta) parts.push(`~${eta < 90 ? eta + 's' : Math.round(eta / 60) + ' min'} left`);
   }
   return parts.join(' · ');
 }

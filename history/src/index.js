@@ -350,7 +350,7 @@ async function walletPnl(addr, { bust = false } = {}) {
     try {
       // Forced recomputes get 20 s: Polymarket's slow-but-successful cold computes run to ~15 s.
       const r = await getJSONMeta(`${PNL_API}?user_address=${addr}&interval=${interval}&fidelity=${fidelity}${bust ? `&_=${nowS}` : ''}`,
-        bust ? 2 : 3, bust ? 20_000 : 8_000);
+        bust ? 1 : 3, bust ? 20_000 : 8_000);   // forced: one attempt — the queue's retry is the second chance
       s = r.data;
       out.asOf = Math.min(out.asOf, nowS - r.age);
     } catch (err) {
@@ -514,7 +514,7 @@ const WALLET_FRESH_S = 300;
 const RANKING_FRESH_S = 120;
 const REFRESH_INLINE_MS = 20_000;   // background (waitUntil) head start; waitUntil allows ~30 s
 const REFRESH_CRON_MS = 35_000;
-const QUEUE_CONCURRENCY = 12;
+const QUEUE_CONCURRENCY = 16;
 const QUEUE_MAX = 400;
 const QUEUE_MAX_AGE_S = 15 * 60;
 const QUEUE_RATE_PER_MIN = 30;       // ETA only; measured 20-40 wallets/min (Polymarket cold recompute 2-15 s)
