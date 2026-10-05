@@ -2417,7 +2417,10 @@ function hpProgressText(r) {
     const elapsed = r.startedAt ? Date.now() / 1000 - r.startedAt : 0;
     const recomputed = r.done - (r.alreadyFresh || 0);
     const eta = recomputed >= 2 && elapsed > 10 ? Math.round((r.total - r.done) * elapsed / recomputed) : r.etaS;
-    if (eta) parts.push(`~${eta < 90 ? eta + 's' : Math.round(eta / 60) + ' min'} left`);
+    const left = r.total - r.done;
+    if (left > 0 && left <= Math.max(3, r.total * 0.2) && r.done > (r.alreadyFresh || 0))
+      parts.push(`finishing the last ${left} — Polymarket is slow on these; if it can't recompute them, its cached copy is used (≤1–2 min more)`);
+    else if (eta) parts.push(`~${eta < 90 ? eta + 's' : Math.round(eta / 60) + ' min'} left`);
   }
   return parts.join(' · ');
 }
