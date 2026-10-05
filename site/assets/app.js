@@ -2281,7 +2281,7 @@ function initShareHistory() {
 // same user-pnl series the Traders tab's All Time PnL uses.
 
 const HP_WINDOWS = [['d1', '24h'], ['w1', '7d'], ['m1', '30d'], ['al', 'All']];
-const hpState = { cid: null, n: 10, data: null, reqId: 0 };
+const hpState = { cid: null, n: 10, data: null, reqId: 0, refreshing: false, cooldownUntil: 0, pollTimer: null, tick: null };
 
 function hpFormat(v) {
   if (v === null || !Number.isFinite(v)) return '—';
@@ -2350,18 +2350,162 @@ function hpRender(loading = false) {
           <span class="hp-val right ${cls(R)}" title="${escapeHtml(tipFor(1, k))}">${sums[1] ? hpFormat(R) : ''}${sums[1]?.[k].missing ? '*' : ''}</span>`;
       }).join('')}
     </div>`;
-  const anyMissing = sums.some(s => HP_WINDOWS.some(([k]) => s[k].missing));
-  const ageMin = d.asOf ? Math.max(0, Math.round((Date.now() / 1000 - d.asOf) / 60)) : null;
-  const age = ageMin === null ? '' : ageMin < 2 ? ' · just updated' : ` · PnL as of ${ageMin}m ago`;
-  if (foot) foot.textContent = `Σ account-wide P&L · top ${hpState.n} holders per side${age}${anyMissing ? ' · * some wallets failed to load' : ''}`;
+  const missingWallets = new Set();
+  for (const o of sides) for (const h of o.holders.slice(0, hpState.n)) if (!h.pnl || Object.values(h.pnl).some(v => v === null)) missingWallets.add(h.addr);
+  const note = d.pending ? ` · ${d.pending} loading…` : missingWallets.size ? ` · * ${missingWallets.size} wallet${missingWallets.size === 1 ? '' : 's'} without data` : '';
+  if (foot) foot.textContent = `Σ account-wide P&L · top ${hpState.n} holders per side${note}`;
+  hpUpdateRefreshButton();
 }
 
-async function loadHoldersPnl() {
+function hpAgo(ts) {
+  const s = Math.max(0, Math.round(Date.now() / 1000 - ts));
+  if (s < 90) return `${s}s ago`;
+  if (s < 5400) return `${Math.round(s / 60)}m ago`;
+  return `${(s / 3600).toFixed(1)}h ago`;
+}
+const hpClock = ts => new Date(ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+/** Button state + hover text: data age, ranking age, last refresh, cooldown. */
+function hpUpdateRefreshButton() {
+  const btn = document.getElementById('hp-refresh');
+  const d = hpState.data;
+  if (!btn) return;
+  const cooldown = Math.max(0, Math.ceil((hpState.cooldownUntil - Date.now()) / 1000));
+  btn.disabled = hpState.refreshing || cooldown > 0 || !hpState.cid;
+  btn.classList.toggle('spinning', hpState.refreshing);
+  btn.textContent = cooldown > 0 && !hpState.refreshing ? `${cooldown}s` : '↻';
+  const lines = [];
+  if (d?.asOf) lines.push(`PnL data as of ${hpClock(d.asOf)} (${hpAgo(d.asOf)}) — oldest wallet shown; Polymarket itself caches PnL for up to 30 min`);
+  if (d?.rankedAt) lines.push(`Holder ranking from ${hpClock(d.rankedAt)} (${hpAgo(d.rankedAt)})`);
+  const r = d?.refresh;
+  if (r?.finishedAt) lines.push(`Last manual refresh ${hpAgo(r.finishedAt)}: ${r.status}`);
+  if (d?.pending) lines.push(`${d.pending} wallet(s) still loading`);
+  lines.push(hpState.refreshing ? 'Refreshing…'
+    : cooldown > 0 ? `Refreshed recently — available again in ${cooldown}s`
+    : `Click to recompute PnL for the top ${hpState.n} holders per side now — progress shows below`);
+  btn.title = lines.join('\n');
+  const foot = document.getElementById('hp-foot');
+  if (foot) foot.title = lines.slice(0, -1).join('\n');
+}
+
+function hpSetStatus(text, kind = 'info') {
+  const el = document.getElementById('hp-status');
+  if (!el) return;
+  el.textContent = text || '';
+  el.hidden = !text;
+  el.className = `hp-status ${kind}`;
+}
+
+function hpStartCooldown(seconds) {
+  hpState.cooldownUntil = Date.now() + seconds * 1000;
+  clearInterval(hpState.tick);
+  hpState.tick = setInterval(() => {
+    hpUpdateRefreshButton();
+    if (Date.now() >= hpState.cooldownUntil) { clearInterval(hpState.tick); hpState.tick = null; }
+  }, 1000);
+  hpUpdateRefreshButton();
+}
+
+function hpProgressText(r) {
+  const parts = [`Updating… ${r.done} / ${r.total} wallets fresh`];
+  if (r.alreadyFresh) parts[0] += ` (${r.alreadyFresh} were already fresh)`;
+  if (r.pausedFor) parts.push(`paused — Polymarket rate limit, resuming in ${r.pausedFor}s`);
+  else {
+    if (r.ahead) parts.push(`${r.ahead} wallets from other refreshes ahead in the queue`);
+    if (r.etaS) parts.push(`~${r.etaS < 90 ? r.etaS + 's' : Math.round(r.etaS / 60) + ' min'} left`);
+  }
+  return parts.join(' · ');
+}
+
+/** A refresh of this market is running (ours or someone else's): poll its progress. */
+function hpPollRefresh(info) {
+  clearTimeout(hpState.pollTimer);
+  hpState.refreshing = true;
+  hpUpdateRefreshButton();
+  if (info) hpSetStatus(hpProgressText(info));
+  const cid = hpState.cid;
+  const poll = async (tries) => {
+    if (hpState.cid !== cid) return;
+    await loadHoldersPnl({ silent: true });
+    const r = hpState.data?.refresh;
+    if (r?.status === 'in_progress' && tries < 150) {
+      hpSetStatus(hpProgressText(r));
+      hpState.pollTimer = setTimeout(() => poll(tries + 1), 4000);
+      return;
+    }
+    hpState.refreshing = false;
+    if (r?.finishedAt) {
+      hpSetStatus(hpResultText(r.status, r.detail || {}), r.status === 'ok' ? 'ok' : 'warn');
+      if (r.cooldownLeft) hpStartCooldown(r.cooldownLeft);
+    } else {
+      hpSetStatus('The refresh did not report back — try again.', 'warn');
+    }
+    hpUpdateRefreshButton();
+  };
+  hpState.pollTimer = setTimeout(() => poll(0), 4000);
+}
+
+function hpResultText(status, d) {
+  const took = d.tookS ? ` in ${d.tookS < 90 ? d.tookS + 's' : Math.round(d.tookS / 60) + ' min'}` : '';
+  const reused = d.alreadyFresh ? ` (${d.alreadyFresh} were already fresh)` : '';
+  if (status === 'ok') return `Updated — all ${d.total} wallets fresh${took}${reused}.`;
+  if (status === 'partial')
+    return `Updated ${d.refreshed} of ${d.total} wallets${took}${reused}. Polymarket couldn't recompute ${d.cdnCopies} in time — showing its cached copy for those (≤30 min old).`;
+  if (status === 'upstream_error') return 'Polymarket did not answer — showing the previous data.';
+  return status;
+}
+
+async function refreshHoldersPnl() {
+  const cid = hpState.cid, n = hpState.n;
+  if (!cid || hpState.refreshing) return;
+  hpState.refreshing = true;
+  hpUpdateRefreshButton();
+  hpSetStatus(`Asking Polymarket to recompute PnL for the top ${n} holders per side…`);
+  let res, body = {};
+  try {
+    res = await fetch(`/api/holders-pnl/refresh?cid=${encodeURIComponent(cid)}&n=${n}`,
+      { method: 'POST', credentials: 'same-origin', signal: AbortSignal.timeout(20000) });
+    body = await res.json().catch(() => ({}));
+  } catch (err) {
+    if (err?.name === 'TimeoutError') { hpPollRefresh(null); return; }   // keep going server-side; follow progress
+    hpState.refreshing = false;
+    hpUpdateRefreshButton();
+    hpSetStatus('Could not reach the server — check your connection and try again.', 'warn');
+    return;
+  }
+  if (hpState.cid !== cid) { hpState.refreshing = false; return; }
+  const st = body.status;
+  if (st === 'in_progress') { await loadHoldersPnl({ silent: true }); hpPollRefresh(body); return; }
+  hpState.refreshing = false;
+  if (st === 'ok' || st === 'partial') {
+    hpSetStatus(hpResultText(st, body.detail || {}), st === 'ok' ? 'ok' : 'warn');
+    hpStartCooldown(body.cooldownLeft || 180);
+    await loadHoldersPnl({ silent: true });
+  } else if (st === 'cooldown') {
+    hpSetStatus(`Already refreshed ${body.finishedAgo}s ago — PnL won't have moved much. Next refresh in ${body.retryAfter}s.`);
+    hpStartCooldown(body.retryAfter);
+  } else if (st === 'busy') {
+    hpSetStatus(`The refresh queue is full (${body.queued} wallets waiting site-wide) — try again in ~${Math.max(1, Math.round(body.retryAfter / 60))} min.`, 'warn');
+    hpStartCooldown(body.retryAfter);
+  } else if (st === 'rate_limited') {
+    hpSetStatus(`Polymarket is rate-limiting PnL recomputes — try again in ${body.retryAfter || 60}s. Showing the previous data.`, 'warn');
+    hpStartCooldown(body.retryAfter || 60);
+  } else if (st === 'upstream_error') {
+    hpSetStatus(hpResultText(st, body), 'warn');
+  } else if (res.status === 401 || res.status === 403) {
+    hpSetStatus('Your session expired — reload the page to sign in again.', 'warn');
+  } else {
+    hpSetStatus(`Refresh failed (${st || 'HTTP ' + res.status}) — try again shortly.`, 'warn');
+  }
+  hpUpdateRefreshButton();
+}
+
+async function loadHoldersPnl({ silent = false } = {}) {
   const cid = hpState.cid;
   if (!cid) return;
   const reqId = ++hpState.reqId;
   const n = hpState.n;
-  hpRender(true);
+  if (!silent) hpRender(true);
   try {
     const res = await fetch(`/api/holders-pnl?cid=${encodeURIComponent(cid)}&n=${n}`, { credentials: 'same-origin' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -2369,6 +2513,14 @@ async function loadHoldersPnl() {
     if (reqId !== hpState.reqId) return;
     hpState.data = data;
     hpRender(false);
+    // Opening a market whose refresh someone else started: show it and wait.
+    if (!silent && data.refresh?.status === 'in_progress') hpPollRefresh(data.refresh);
+    else if (!silent && data.refresh?.cooldownLeft && data.refresh.n >= n) hpStartCooldown(data.refresh.cooldownLeft);
+    // First view of a cold market: some wallets still loading server-side.
+    if (data.pending && !hpState.refreshing) {
+      clearTimeout(hpState.pendingTimer);
+      hpState.pendingTimer = setTimeout(() => { if (hpState.cid === cid) loadHoldersPnl({ silent: true }); }, 5000);
+    }
   } catch (err) {
     if (reqId !== hpState.reqId) return;
     console.warn('holders pnl failed:', err);
@@ -2377,14 +2529,24 @@ async function loadHoldersPnl() {
   }
 }
 
+function hpResetRefreshUi() {
+  clearTimeout(hpState.pollTimer);
+  clearTimeout(hpState.pendingTimer);
+  clearInterval(hpState.tick);
+  hpState.refreshing = false;
+  hpState.cooldownUntil = 0;
+  hpSetStatus('');
+}
+
 function openHoldersPnl(cid) {
-  if (hpState.cid !== cid) { hpState.cid = cid; hpState.data = null; }
+  if (hpState.cid !== cid) { hpState.cid = cid; hpState.data = null; hpResetRefreshUi(); }
   loadHoldersPnl();
 }
 
 function closeHoldersPnl() {
   hpState.cid = null;
   hpState.reqId++;
+  hpResetRefreshUi();
 }
 
 function initHoldersPnl() {
@@ -2392,8 +2554,11 @@ function initHoldersPnl() {
     const n = Number(btn.dataset.n);
     if (n === hpState.n) return;
     hpState.n = n;
+    hpState.cooldownUntil = 0;   // a larger n is allowed right after a refresh
+    hpSetStatus('');
     loadHoldersPnl();
   }));
+  document.getElementById('hp-refresh')?.addEventListener('click', refreshHoldersPnl);
 }
 
 // ============================================================

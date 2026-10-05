@@ -1381,3 +1381,29 @@ th.sortable.sorted {
 .sh-toolbar .sh-title { font-size: 0.9rem; }
 .sh-legend { margin: 0 0 -0.35rem; padding-left: 0.25rem; min-height: 0; }
 .sh-legend-item { font-size: 0.78rem; padding: 0; }
+
+/* Top Holders PnL: larger outcome labels, footer refresh + status line */
+.hp-side { font-size: 0.95rem; font-weight: 700; color: var(--text-primary); }
+.hp-foot { display: flex; align-items: center; gap: 0.5rem; }
+.hp-foot-text { flex: 1; cursor: help; }
+.hp-refresh {
+  flex: none;
+  min-width: 2rem;
+  height: 1.7rem;
+  padding: 0 0.45rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.hp-refresh:hover:not(:disabled) { color: var(--text-primary); border-color: var(--accent-blue); }
+.hp-refresh:disabled { cursor: default; opacity: 0.6; }
+.hp-refresh.spinning { animation: hp-spin 0.9s linear infinite; opacity: 1; }
+@keyframes hp-spin { to { transform: rotate(360deg); } }
+.hp-status { margin-top: 0.45rem; font-size: 0.78rem; line-height: 1.4; color: var(--text-secondary); }
+.hp-status[hidden] { display: none; }
+.hp-status.ok { color: var(--accent-green); }
+.hp-status.warn { color: var(--accent-yellow); }

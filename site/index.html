@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/style.css?v=unified-20261005a">
+  <link rel="stylesheet" href="assets/style.css?v=unified-20261005c">
 </head>
 <body>
   <div class="top-shell">
@@ -213,7 +213,11 @@
               </div>
             </div>
             <div id="hp-body" class="hp-body"></div>
-            <div id="hp-foot" class="hp-foot"></div>
+            <div class="hp-foot">
+              <span id="hp-foot" class="hp-foot-text"></span>
+              <button type="button" id="hp-refresh" class="hp-refresh" aria-label="Refresh holder PnL now">&#8635;</button>
+            </div>
+            <div id="hp-status" class="hp-status" role="status" aria-live="polite" hidden></div>
           </aside>
         </div>
       </div>
@@ -453,6 +457,6 @@
   </footer>
 
   <script src="assets/site-config.js"></script>
-  <script src="assets/app.js?v=unified-20261005a"></script>
+  <script src="assets/app.js?v=unified-20261005c"></script>
 </body>
 </html>

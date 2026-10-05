@@ -71,3 +71,21 @@ CREATE TABLE IF NOT EXISTS holders_pnl_cache (
   ts   INTEGER NOT NULL,
   body TEXT NOT NULL
 );
+-- Member-triggered holders-PnL refreshes: per-market lock + last outcome (drives cooldown / status UI).
+CREATE TABLE IF NOT EXISTS holders_refresh (
+  cid         TEXT PRIMARY KEY,
+  started_ts  INTEGER NOT NULL,
+  finished_ts INTEGER,
+  n           INTEGER,
+  status      TEXT,
+  detail      TEXT
+);
+CREATE INDEX IF NOT EXISTS holders_refresh_started ON holders_refresh (started_ts);
+-- Site-wide queue of wallets awaiting a forced (cache-busted) PnL recompute.
+CREATE TABLE IF NOT EXISTS pnl_queue (
+  addr   TEXT PRIMARY KEY,
+  enq_ts INTEGER NOT NULL,
+  tries  INTEGER NOT NULL DEFAULT 0,
+  claimed INTEGER NOT NULL DEFAULT 0       -- unix s of a worker's claim (0 = free); added live via ALTER 2026-10-05
+);
+CREATE INDEX IF NOT EXISTS pnl_queue_enq ON pnl_queue (enq_ts);
