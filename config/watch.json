@@ -22,7 +22,7 @@
   "retry_base_delay_ms": 1000,
   "activity_limit_per_trader": 500,
   "positions_limit_per_trader": 500,
-  "scrape_pnl_interval_minutes": 60,
+  "scrape_pnl_interval_minutes": 15,
   "scrape_concurrency": 8,
   "inactivity_timeout_minutes": 30,
   "auto_reload_seconds": 30

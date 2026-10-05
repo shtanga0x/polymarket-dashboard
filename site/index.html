@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/style.css?v=unified-20261005h">
+  <link rel="stylesheet" href="assets/style.css?v=unified-20261005i">
 </head>
 <body>
   <div class="top-shell">
@@ -407,7 +407,7 @@
         <ul>
           <li><strong>Pipeline</strong> — a GitHub Actions job runs every minute:
             it pulls each tracked wallet's positions, balances and activity from the Polymarket APIs
-            (through rotating proxies, with retries), fetches all-time PnL (cached ~1h),
+            (through rotating proxies, with retries), fetches all-time PnL (refreshed every 15 min),
             aggregates everything, and diffs against the previous run to produce the Recent Changes feed.</li>
           <li><strong>Storage</strong> — results are published to Cloudflare R2 as immutable snapshots
             plus a tiny <code>metadata.json</code> pointer that flips only after a snapshot is fully
@@ -433,8 +433,8 @@
           <li><strong>Position ≠ opinion.</strong> A position can be a hedge, market-making inventory, an
             exit in progress, or a leg of a structure. The balanced-pairs filter catches the obvious
             cases, not all of them.</li>
-          <li><strong>Numbers are best-effort.</strong> PnL comes from Polymarket's own profile stats and
-            can lag up to an hour; exposure uses current market prices, which move; API hiccups can
+          <li><strong>Numbers are best-effort.</strong> PnL is the same figure Polymarket profiles show and
+            can lag up to 15 minutes; exposure uses current market prices, which move; API hiccups can
             briefly under-count a trader.</li>
           <li><strong>Thin markets distort.</strong> In low-liquidity markets a single tracked trader can
             be most of the volume — "3 traders, $80k" means little if the whole book is $100k.</li>
@@ -457,6 +457,6 @@
   </footer>
 
   <script src="assets/site-config.js"></script>
-  <script src="assets/app.js?v=unified-20261005h"></script>
+  <script src="assets/app.js?v=unified-20261005i"></script>
 </body>
 </html>

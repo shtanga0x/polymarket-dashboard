@@ -19,8 +19,9 @@ import {
 } from './polymarket_api.js';
 
 // Bumped to 3 when the all-time PnL source switched from the (broken) HTML
-// profile scrape to the user-pnl API — invalidates cached unrealized-only values.
-const PNL_LOOKUP_VERSION = 3;
+// profile scrape to the user-pnl API; to 4 when it moved to data-api
+// /v2/user-pnl `trade_pnl` (the profile's own number) — flushes cached values.
+const PNL_LOOKUP_VERSION = 4;
 
 /**
  * Parse CSV file
@@ -110,7 +111,7 @@ function computeExposure(position) {
  *
  * PnL cache: traders whose previously fetched all-time PnL is younger than
  * config.scrape_pnl_interval_minutes reuse the cached value; only stale
- * entries are re-fetched (user-pnl API), in parallel batches of
+ * entries are re-fetched (data-api /v2/user-pnl), in parallel batches of
  * config.scrape_concurrency.
  *
  * @returns {Promise<{traderPortfolios: object, pnlStats: {cached: number, fetched: number, failed: number}}>}
@@ -160,7 +161,7 @@ export async function fetchAllPortfolios(traders, config, dataDir) {
     }
   }
 
-  // Fetch all-time PnL for stale traders via the user-pnl API, in parallel
+  // Fetch all-time PnL for stale traders via data-api /v2/user-pnl, in parallel
   // with the position/value/usdc fetches above. (Replaces the old HTML profile
   // scrape that broke on Polymarket's App Router migration.)
   const stalePnlAddresses = staleTraders.map(t => t.address.toLowerCase());

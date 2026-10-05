@@ -9,7 +9,6 @@ import { getProxyAgent } from './proxy_manager.js';
 
 const DATA_API_BASE = 'https://data-api.polymarket.com';
 const LEADERBOARD_API_BASE = 'https://lb-api.polymarket.com';
-const USER_PNL_API_BASE = 'https://user-pnl-api.polymarket.com';
 const POLYGON_RPC = 'https://polygon-bor-rpc.publicnode.com';
 
 // Collateral token contracts on Polygon
@@ -212,23 +211,26 @@ export async function fetchWalletTrades(address, limit = 500, config = {}) {
 }
 
 /**
- * Fetch a wallet's all-time PnL from Polymarket's user-pnl API.
+ * Fetch a wallet's all-time PnL — the "Total PnL" polymarket.com profiles show.
  *
- * Returns the last point of the cumulative P/L series (= current all-time
- * profit/loss), or null when unavailable. This replaces the old HTML profile
- * scrape, which silently broke when Polymarket migrated to the Next.js App
- * Router — profile pages no longer embed __NEXT_DATA__, so the scrape always
- * returned null and the pipeline fell back to unrealized-only PnL.
+ * data-api /v2/user-pnl is the endpoint the profile page itself calls; every
+ * point carries the CUMULATIVE `trade_pnl`, so the last point of the small 1-day
+ * series is the all-time figure. Verified 2026-10-05 against 6 profiles to the
+ * cent. The older user-pnl-api.polymarket.com series disagreed by >5% for ~25 of
+ * 131 traders (market makers up to 30× high — e.g. $983k vs the profile's
+ * $32.6k), was CDN-cached 30 min and ~9× slower. Returns null when the wallet
+ * has no PnL history (the caller then falls back to unrealized PnL).
  *
  * @param {string} address - Wallet address
  * @param {object} config - Config object
  * @returns {Promise<number|null>} All-time PnL in USD, or null
  */
 export async function fetchAllTimePnL(address, config = {}) {
-  const url = `${USER_PNL_API_BASE}/user-pnl?user_address=${address.toLowerCase()}&interval=all&fidelity=1d`;
+  const url = `${DATA_API_BASE}/v2/user-pnl?user=${address.toLowerCase()}&interval=1d&fidelity=1h`;
   const data = await fetchWithRetry(url, {}, config);
-  if (!Array.isArray(data) || data.length === 0) return null;
-  const p = parseFloat(data[data.length - 1]?.p);
+  const points = data?.data?.points;
+  if (!Array.isArray(points) || points.length === 0) return null;
+  const p = parseFloat(points[points.length - 1]?.trade_pnl);
   return Number.isFinite(p) ? p : null;
 }
 

@@ -2278,7 +2278,7 @@ function initShareHistory() {
 // For the market open in the share-history panel: the top 10/20/50 wallets by
 // shares on each outcome (Polymarket-wide holders, /api/holders-pnl) and the
 // SUM of their account-wide PnL over 24h / 7d / 30d / all. Wallet PnL is the
-// same user-pnl series the Traders tab's All Time PnL uses.
+// same /v2/user-pnl `trade_pnl` the Traders tab's All Time PnL and profiles use.
 
 const HP_WINDOWS = [['d1', '24h'], ['w1', '7d'], ['m1', '30d'], ['al', 'All']];
 const hpState = { cid: null, n: 10, data: null, reqId: 0, refreshing: false, cooldownUntil: 0, tick: null };
@@ -2701,19 +2701,18 @@ async function fetchCheckerValue(address) {
 }
 
 /**
- * Fetch all-time PnL from Polymarket's user-pnl API.
- * (The old HTML profile scrape broke when Polymarket moved to the App Router —
- * profile pages no longer embed __NEXT_DATA__.)
+ * All-time PnL exactly as polymarket.com profiles show it: last cumulative
+ * `trade_pnl` of data-api /v2/user-pnl (same source as the server pipeline).
  */
 async function fetchCheckerPnL(address) {
   try {
     const response = await fetch(
-      `https://user-pnl-api.polymarket.com/user-pnl?user_address=${address.toLowerCase()}&interval=all&fidelity=1d`
+      `${DATA_API_BASE}/v2/user-pnl?user=${address.toLowerCase()}&interval=1d&fidelity=1h`
     );
     if (!response.ok) return null;
-    const data = await response.json();
-    if (!Array.isArray(data) || data.length === 0) return null;
-    const p = parseFloat(data[data.length - 1]?.p);
+    const points = (await response.json())?.data?.points;
+    if (!Array.isArray(points) || points.length === 0) return null;
+    const p = parseFloat(points[points.length - 1]?.trade_pnl);
     return Number.isFinite(p) ? p : null;
   } catch {
     return null;
