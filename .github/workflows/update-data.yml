@@ -93,10 +93,14 @@ jobs:
         run: node scripts/fetch_data.js --site "$SITE"
         env:
           NODE_OPTIONS: '--max-old-space-size=1024'
-          # Datacenter proxies for rate-limit avoidance (optional).
+          # Datacenter proxies, now a FALLBACK only (2026-10-05): requests go
+          # direct and only a retry after 403/429/network error uses a proxy.
+          # Rollback to always-proxied without a code change:
+          #   gh variable set PROXY_MODE --body always
           # Format per line: host:port:username:password
           # Set via: gh secret set PROXIES < proxies.txt
           PROXIES: ${{ secrets.PROXIES }}
+          PROXY_MODE: ${{ vars.PROXY_MODE || 'fallback' }}
 
       - name: Build watermark index
         # Emits wm_offsets.json (byte offsets → the Worker's streaming per-viewer

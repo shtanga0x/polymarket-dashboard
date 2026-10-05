@@ -43,6 +43,14 @@ export class HttpError extends Error {
  * makes ~151 /positions calls per run (131 wallets + pages for >500-position
  * wallets), so they are paced to stay under the limit instead of tripping it.
  */
+// Proxy policy (env PROXY_MODE): 'fallback' (default) — first attempt goes
+// direct, only a retry after a 403 / 429 / network error uses a proxy; 'always'
+// — every attempt proxied (pre-2026-10-05 behaviour, the rollback switch);
+// 'never'. A 3-round A/B on GitHub runners (2026-10-05) had direct runs 1.2-2.5×
+// faster with zero failures once /positions was paced, while whole-run proxy
+// outages had been stalling runs ~5 min.
+const PROXY_MODE = (process.env.PROXY_MODE || 'fallback').toLowerCase();
+
 const RATE_LIMITS = [
   { match: '/positions', max: 120, windowMs: 10_000 },
 ];
@@ -78,8 +86,9 @@ async function fetchWithRetry(url, options = {}, config = {}) {
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     await rateLimit(url);
-    // Get a fresh proxy agent each attempt (round-robin rotation)
-    const agent = getProxyAgent();
+    // Proxy only when the policy says so (fresh agent each attempt, round-robin).
+    const useProxy = PROXY_MODE === 'always' || (PROXY_MODE === 'fallback' && attempt > 0);
+    const agent = useProxy ? getProxyAgent() : null;
     // Per-attempt timeout: a dead proxy connection otherwise hangs until the
     // OS gives up (seen 2026-10-04: one request stalled a watch run ~4 min,
     // which also makes the dispatcher skip ticks). On timeout the catch below
