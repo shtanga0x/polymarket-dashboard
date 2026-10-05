@@ -2507,7 +2507,9 @@ async function loadHoldersPnl({ silent = false } = {}) {
   const n = hpState.n;
   if (!silent) hpRender(true);
   try {
-    const res = await fetch(`/api/holders-pnl?cid=${encodeURIComponent(cid)}&n=${n}`, { credentials: 'same-origin' });
+    // Polls must not reuse the browser's cached copy (the server allows 30 s).
+    const res = await fetch(`/api/holders-pnl?cid=${encodeURIComponent(cid)}&n=${n}`,
+      { credentials: 'same-origin', cache: silent ? 'no-store' : 'default' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     if (reqId !== hpState.reqId) return;

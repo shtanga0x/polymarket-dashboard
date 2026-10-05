@@ -486,7 +486,9 @@ async function holdersPnl(env, url, ctx) {
   const refresh = await env.DB.prepare('SELECT * FROM holders_refresh WHERE cid = ?').bind(cid).first();
   console.log(`holders-pnl ${cid.slice(0, 10)} n=${n} wallets=${addrs.length} inline=${missing.length} bg=${stale.length}`);
   const pending = addrs.filter((a) => !pnl.has(a)).length;
-  return json({ cid, n, rankedAt, asOf, pending, outcomes, refresh: await refreshInfo(env, refresh, nowS) }, 200, pending ? 0 : 30);
+  const refreshState = await refreshInfo(env, refresh, nowS);
+  const cacheable = !pending && refreshState?.status !== 'in_progress';
+  return json({ cid, n, rankedAt, asOf, pending, outcomes, refresh: refreshState }, 200, cacheable ? 30 : 0);
 }
 
 // ─── Member-triggered refresh (queued) ───────────────────────────────────────
