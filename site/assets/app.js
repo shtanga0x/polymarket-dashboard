@@ -2448,9 +2448,10 @@ function hpPollRefresh(info) {
 function hpResultText(status, d) {
   const took = d.tookS ? ` in ${d.tookS < 90 ? d.tookS + 's' : Math.round(d.tookS / 60) + ' min'}` : '';
   const reused = d.alreadyFresh ? ` (${d.alreadyFresh} were already fresh)` : '';
-  if (status === 'ok') return `Updated — all ${d.total} wallets fresh${took}${reused}.`;
+  const queued = d.queuedTotal ?? (d.total - (d.alreadyFresh || 0));
+  if (status === 'ok') return queued ? `Updated — recomputed ${queued} wallets${took}${reused}; all ${d.total} are fresh.` : `All ${d.total} wallets were already fresh.`;
   if (status === 'partial')
-    return `Updated ${d.refreshed} of ${d.total} wallets${took}${reused}. Polymarket couldn't recompute ${d.cdnCopies} in time — showing its cached copy for those (≤30 min old).`;
+    return `Recomputed ${d.refreshed} of ${queued} wallets${took}${reused}. Polymarket couldn't recompute ${d.cdnCopies} in time — showing its cached copy for those (≤30 min old).`;
   if (status === 'upstream_error') return 'Polymarket did not answer — showing the previous data.';
   return status;
 }

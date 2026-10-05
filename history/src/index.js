@@ -595,7 +595,7 @@ async function refreshProgress(env, r) {
   }
   const ahead = queued
     ? (await env.DB.prepare('SELECT COUNT(*) AS c FROM pnl_queue WHERE enq_ts < ?').bind(r.started_ts).first()).c : 0;
-  return { total: detail.total || addrs.length, alreadyFresh: detail.alreadyFresh || 0, queued, ahead, done: (detail.total || addrs.length) - queued };
+  return { total: detail.total || addrs.length, alreadyFresh: detail.alreadyFresh || 0, queued, ahead, done: (detail.total || addrs.length) - queued };  // addrs = queued wallets only
 }
 
 /** Close a market refresh once none of its wallets are queued any more. */
@@ -611,7 +611,8 @@ async function finalizeRefresh(env, r, nowS) {
   // Finished = when its last wallet landed, not when somebody next looked.
   const lastTs = Math.max(r.started_ts, ...[...rows.values()].map((p) => p.ts).filter((t) => t >= r.started_ts - 60));
   const finishedTs = Math.min(nowS, lastTs);
-  const fin = { total: prog.total, alreadyFresh: prog.alreadyFresh, refreshed: addrs.length - cdnCopies, cdnCopies, tookS: finishedTs - r.started_ts };
+  // Only the wallets this refresh queued are judged; already-fresh ones were never recomputed.
+  const fin = { total: prog.total, alreadyFresh: prog.alreadyFresh, queuedTotal: addrs.length, refreshed: addrs.length - cdnCopies, cdnCopies, tookS: finishedTs - r.started_ts };
   await env.DB.prepare('UPDATE holders_refresh SET finished_ts = ?, status = ?, detail = ? WHERE cid = ? AND finished_ts IS NULL')
     .bind(finishedTs, status, JSON.stringify({ ...fin, addrs: [] }), r.cid).run();
   return { ...prog, finished: true, finishedTs, status, ...fin };
@@ -671,7 +672,7 @@ async function refreshHoldersPnl(env, url, ctx) {
   stmts.push(db.prepare(
     `INSERT INTO holders_refresh (cid, started_ts, finished_ts, n, status, detail) VALUES (?, ?, NULL, ?, 'in_progress', ?)
      ON CONFLICT(cid) DO UPDATE SET started_ts = excluded.started_ts, finished_ts = NULL, n = excluded.n, status = 'in_progress', detail = excluded.detail`
-  ).bind(cid, nowS, n, JSON.stringify({ addrs, total: addrs.length, alreadyFresh: fresh.size })));
+  ).bind(cid, nowS, n, JSON.stringify({ addrs: todo, total: addrs.length, alreadyFresh: fresh.size })));
   await db.batch(stmts);
 
   // Answer at once with progress; work this market's wallets in the background
