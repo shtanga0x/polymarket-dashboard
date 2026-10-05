@@ -64,4 +64,8 @@ jobs:
           echo "request failures:  $(grep -c 'Request failed' "$f")"
           echo "traders failed:    $(grep -c 'Failed to fetch for' "$f")"
           echo "-- sample errors --"
-          grep -E "Rate limited|Blocked|Server error|Request failed|Failed to fetch" "$f" | sed -E 's#https://[^ ,]*#URL#g' | sort | uniq -c | sort -rn | head -8 || true
+          grep -E "Rate limited|Blocked|Server error|Request failed|Failed to fetch" "$f" | sed -E 's#(https://[^/ ]+/[a-z0-9/-]+)[^ ,]*#\1#g; s#0x[0-9a-f]{40}#0x…#g' | sort | uniq -c | sort -rn | head -10 || true
+          echo "-- 429s by endpoint --"
+          grep 'Rate limited' "$f" | grep -oE 'https://[^/ ]+/[a-z0-9/-]+' | sort | uniq -c || true
+          echo "-- 429s with offset (position paging) --"
+          grep 'Rate limited' "$f" | grep -c 'offset=' || true
