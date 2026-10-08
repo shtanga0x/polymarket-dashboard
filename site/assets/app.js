@@ -2942,9 +2942,36 @@ const CHECKER_PCT_SORT_LABELS = {
   ratio: 'sorted by x ▼'
 };
 
+// Other column sorts, same click semantics as the main Portfolio table:
+// column = null means the default # order; change columns cycle
+// abs▼ → rel▼ → abs▲ → rel▲. Mutually exclusive with the %% sort.
+let checkerSort = { column: null, direction: 'desc', mode: 'abs' };
+const CHECKER_CHANGE_COLUMNS = ['change1h', 'change1d', 'change1w'];
+
 function cycleCheckerPctSort() {
   const i = CHECKER_PCT_SORTS.indexOf(checkerPctSort);
   checkerPctSort = CHECKER_PCT_SORTS[(i + 1) % CHECKER_PCT_SORTS.length];
+  checkerSort = { column: null, direction: 'desc', mode: 'abs' };
+  renderCheckerTable();
+}
+
+function handleCheckerSort(column) {
+  checkerPctSort = null;
+  if (column === 'rank') {
+    // # header: back to the default order (rank by this wallet's exposure).
+    checkerSort = { column: null, direction: 'desc', mode: 'abs' };
+  } else if (checkerSort.column !== column) {
+    // Text sorts A→Z first, numbers largest first.
+    checkerSort = { column, direction: column === 'title' ? 'asc' : 'desc', mode: 'abs' };
+  } else if (CHECKER_CHANGE_COLUMNS.includes(column)) {
+    const { mode, direction } = checkerSort;
+    if (mode === 'abs' && direction === 'desc') checkerSort.mode = 'rel';
+    else if (mode === 'rel' && direction === 'desc') { checkerSort.mode = 'abs'; checkerSort.direction = 'asc'; }
+    else if (mode === 'abs' && direction === 'asc') checkerSort.mode = 'rel';
+    else { checkerSort.mode = 'abs'; checkerSort.direction = 'desc'; }
+  } else {
+    checkerSort.direction = checkerSort.direction === 'asc' ? 'desc' : 'asc';
+  }
   renderCheckerTable();
 }
 
@@ -2952,6 +2979,19 @@ function updateCheckerPctHeader() {
   const label = document.getElementById('checker-pct-sort-label');
   if (label) label.textContent = CHECKER_PCT_SORT_LABELS[checkerPctSort] || 'your / model (x)';
   document.getElementById('checker-pct-header')?.classList.toggle('sorted', !!checkerPctSort);
+
+  const active = checkerSort.column;
+  document.querySelectorAll('#checker-table .sort-ind').forEach(el => {
+    const col = el.dataset.col;
+    const on = active === col;
+    let text = '';
+    if (on) {
+      text = checkerSort.direction === 'asc' ? ' ▲' : ' ▼';
+      if (CHECKER_CHANGE_COLUMNS.includes(col) && checkerSort.mode === 'rel') text += '%';
+    }
+    el.textContent = text;
+    el.closest('th')?.classList.toggle('sorted', on);
+  });
 }
 
 /** "x10", "x2.5", "x0.25" — Your % ÷ Model %, trimmed to a readable precision. */
@@ -3029,6 +3069,8 @@ function renderCheckerTable() {
       ? (modelPos.totalExposure / modelTotalExposure) * 100
       : 0;
     pos._ratio = pos._modelPct > 0 ? pos._userPct / pos._modelPct : null;
+    pos._modelPos = modelPos;
+    pos._changes = calculatePositionChanges(pos.conditionId, outcomeIndex);
   }
 
   // %% sort: a market ranks by its strongest outcome on the chosen metric, so
@@ -3040,6 +3082,35 @@ function renderCheckerTable() {
       (max, p) => (p[key] != null && p[key] > max ? p[key] : max), -Infinity);
     orderedGroups.sort((a, b) => groupValue(b) - groupValue(a)
       || marketRank.get(a[0].conditionId) - marketRank.get(b[0].conditionId));
+  } else if (checkerSort.column) {
+    // Column sort works per market (Yes+No summed, like the main Portfolio)
+    // so a market's outcome rows stay together. Ties keep the # rank order.
+    const col = checkerSort.column;
+    const dir = checkerSort.direction === 'asc' ? 1 : -1;
+    const changeKey = { change1h: 'h1', change1d: 'd1', change1w: 'w1' }[col];
+    const sum = (g, f) => g.reduce((s, p) => s + (f(p) || 0), 0);
+    const groupValue = g => {
+      switch (col) {
+        case 'exposure': return sum(g, p => Math.abs(parseFloat(p.currentValue || 0)));
+        case 'traderCount': return Math.max(...g.map(p => p._modelPos?.traderCount || 0));
+        default: {
+          // Change columns: $ change of tracked traders' holdings, or (rel)
+          // that change as % of the model's current exposure to these outcomes.
+          const change = sum(g, p => p._changes[changeKey]);
+          if (checkerSort.mode !== 'rel') return change;
+          const modelExp = sum(g, p => p._modelPos?.totalExposure);
+          return modelExp > 0 ? (change / modelExp) * 100 : 0;
+        }
+      }
+    };
+    const rankOf = g => marketRank.get(g[0].conditionId);
+    if (col === 'title') {
+      orderedGroups.sort((a, b) => dir * (a[0].title || '').localeCompare(b[0].title || '')
+        || rankOf(a) - rankOf(b));
+    } else {
+      const vals = new Map(orderedGroups.map(g => [g, groupValue(g)]));
+      orderedGroups.sort((a, b) => dir * (vals.get(a) - vals.get(b)) || rankOf(a) - rankOf(b));
+    }
   }
   for (const group of orderedGroups) {
     group.sort((a, b) => {
@@ -3052,7 +3123,7 @@ function renderCheckerTable() {
   const buildRow = (pos, indexCell, isFirst, rowSpanCount) => {
       const exposure = Math.abs(parseFloat(pos.currentValue || 0));
       const outcomeIndex = pos.outcomeIndex !== undefined ? pos.outcomeIndex : (pos.outcome === 'Yes' ? 0 : 1);
-      const modelPos = findModelPosition(pos.conditionId, outcomeIndex, pos.outcome);
+      const modelPos = pos._modelPos;
       const fmtPct = v => (v > 0 && v < 0.01 ? '<0.01' : v.toFixed(2)) + '%';
       const pctCell = `${fmtPct(pos._userPct)} / ${pos._modelPct > 0 ? fmtPct(pos._modelPct) : '-'}`
         + (pos._ratio != null ? ` <span class="alloc-ratio">(${formatAllocRatio(pos._ratio)})</span>` : '');
@@ -3068,7 +3139,7 @@ function renderCheckerTable() {
       }
 
       // Time-based changes
-      const changes = calculatePositionChanges(pos.conditionId, outcomeIndex);
+      const changes = pos._changes;
 
       const h1Class = changes.h1 >= 0 ? 'positive' : 'negative';
       const d1Class = changes.d1 >= 0 ? 'positive' : 'negative';

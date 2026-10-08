@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/style.css?v=unified-20261005i">
+  <link rel="stylesheet" href="assets/style.css?v=unified-20261008a">
 </head>
 <body>
   <div class="top-shell">
@@ -306,15 +306,15 @@
           <table id="checker-table">
             <thead>
               <tr>
-                <th>#</th>
-                <th>Market</th>
+                <th id="checker-sort-rank" class="sortable" onclick="handleCheckerSort('rank')" title="Rank by this wallet's exposure in the market. Click to restore this default order.">#</th>
+                <th id="checker-sort-title" class="sortable" onclick="handleCheckerSort('title')">Market<span class="sort-ind" data-col="title"></span></th>
                 <th>Side</th>
-                <th class="tooltip-header" title="Current market value of this wallet's position: shares &times; current price. Not cost basis &mdash; it moves with the market.">Your Exposure<span class="header-info">shares &times; price</span></th>
+                <th id="checker-sort-exposure" class="sortable tooltip-header" onclick="handleCheckerSort('exposure')" title="Current market value of this wallet's position: shares &times; current price. Not cost basis &mdash; it moves with the market.">Your Exposure<span class="sort-ind" data-col="exposure"></span><span class="header-info">shares &times; price</span></th>
                 <th id="checker-pct-header" class="sortable tooltip-header" onclick="cycleCheckerPctSort()" title="Your % = this position's share of the wallet's total capital (open positions + USDC balance). Model % = this outcome's share of the model portfolio's total exposure. (x…) = Your % &divide; Model %. Click to sort by Your %, Model %, then the ratio.">%%<span class="header-info" id="checker-pct-sort-label">your / model (x)</span></th>
-                <th id="traders-column-label" class="tooltip-header" title="Tracked traders currently holding this outcome in the model portfolio.">Traders</th>
-                <th class="tooltip-header">1h Change<span class="header-info">last hour</span></th>
-                <th class="tooltip-header">24h Change<span class="header-info">1h&ndash;24h ago</span></th>
-                <th class="tooltip-header">1w Change<span class="header-info">1&ndash;7 days ago</span></th>
+                <th id="checker-sort-traderCount" class="sortable tooltip-header" onclick="handleCheckerSort('traderCount')" title="Tracked traders currently holding this outcome in the model portfolio."><span id="traders-column-label">Traders</span><span class="sort-ind" data-col="traderCount"></span></th>
+                <th id="checker-sort-change1h" class="sortable tooltip-header" onclick="handleCheckerSort('change1h')">1h Change<span class="sort-ind" data-col="change1h"></span><span class="header-info">last hour</span></th>
+                <th id="checker-sort-change1d" class="sortable tooltip-header" onclick="handleCheckerSort('change1d')">24h Change<span class="sort-ind" data-col="change1d"></span><span class="header-info">1h&ndash;24h ago</span></th>
+                <th id="checker-sort-change1w" class="sortable tooltip-header" onclick="handleCheckerSort('change1w')">1w Change<span class="sort-ind" data-col="change1w"></span><span class="header-info">1&ndash;7 days ago</span></th>
                 <th class="recent-changes-col"><span class="recent-changes-th" title="Recent changes">
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M2.1 12s3.6-6.6 9.9-6.6S21.9 12 21.9 12 18.3 18.6 12 18.6 2.1 12 2.1 12Z"></path>
@@ -457,6 +457,6 @@
   </footer>
 
   <script src="assets/site-config.js"></script>
-  <script src="assets/app.js?v=unified-20261005i"></script>
+  <script src="assets/app.js?v=unified-20261008a"></script>
 </body>
 </html>
