@@ -1830,6 +1830,9 @@ async function loadData() {
 // which records every per-trader size change for markets that have been in
 // this site's top 200 — from first appearance until the market closes.
 // History rows are change-only, so each outcome total is a step function.
+// The response also carries each outcome's price series (CLOB midpoints, also
+// change-only): the Shares/USDT toggle plots shares × price, and the Price
+// toggle overlays the outcome prices on a right-hand axis.
 
 const SH_RANGE_SECONDS = { '1d': 86400, '1w': 7 * 86400, '1m': 30 * 86400, max: null };
 // Categorical slots in fixed order, keyed by outcomeIndex (blue, orange, aqua, yellow).
@@ -1838,8 +1841,38 @@ const SH_SERIES = {
   dark: ['#3987e5', '#d95926', '#199e70', '#c98500']
 };
 const SH_PAD = { top: 16, right: 104, bottom: 34, left: 72 };
+const SH_PRICE_AXIS_W = 46;      // extra right gutter for the price axis labels
+const SH_PRICE_ALPHA = 0.6;
+const SH_PREFS_KEY = 'pm-share-history-prefs';
 
-const shState = { cid: null, range: '1d', data: null, series: [], hidden: new Set(), hoverTs: null, reqId: 0 };
+const shState = {
+  cid: null, range: '1d', data: null, series: [], hidden: new Set(), hoverTs: null, reqId: 0,
+  unit: 'shares', showPrice: false
+};
+try {
+  const prefs = JSON.parse(localStorage.getItem(SH_PREFS_KEY) || '{}');
+  if (prefs.unit === 'usd') shState.unit = 'usd';
+  if (prefs.showPrice === true) shState.showPrice = true;
+} catch { /* storage unavailable — defaults */ }
+
+function shSavePrefs() {
+  try { localStorage.setItem(SH_PREFS_KEY, JSON.stringify({ unit: shState.unit, showPrice: shState.showPrice })); }
+  catch { /* ignore */ }
+}
+
+/** The plotted step series of an outcome: share counts, or their USDT value. */
+function shPts(s) {
+  return shState.unit === 'usd' ? s.vpoints : s.points;
+}
+
+function shFormatValue(v) {
+  return shState.unit === 'usd' ? (v < 0 ? '−$' : '$') + shFormatShares(Math.abs(v)) : shFormatShares(v);
+}
+
+function shFormatPrice(p, step = 0.01) {
+  const c = p * 100;
+  return (step < 0.01 ? c.toFixed(1) : c.toFixed(0)) + '¢';
+}
 
 function shTheme() {
   const css = getComputedStyle(document.documentElement);
@@ -1906,11 +1939,46 @@ function shBuildSeries(data) {
       if (pts.length && pts[pts.length - 1].ts === ts) pts[pts.length - 1] = p; else pts.push(p);
     }
   }
-  return [...outcomes].sort((a, b) => a - b).map(oi => ({
-    oi,
-    name: data.market.outcomes?.[oi] || `Outcome ${oi}`,
-    points: points.get(oi)
-  }));
+  return [...outcomes].sort((a, b) => a - b).map(oi => {
+    const pts = points.get(oi);
+    const prices = (data.prices?.[oi] || []).map(([ts, price]) => ({ ts, price }));
+    return {
+      oi,
+      name: data.market.outcomes?.[oi] || `Outcome ${oi}`,
+      points: pts,
+      prices,
+      vpoints: shValueSeries(pts, prices)
+    };
+  });
+}
+
+/**
+ * shares × price on the union of both step grids. Starts at the first known
+ * price (earlier steps have no value); `shares` and `price` ride along for the tooltip.
+ */
+function shValueSeries(points, prices) {
+  if (!prices.length || !points.length) return [];
+  const out = [];
+  let i = 0, j = 0;
+  let pt = points[0], pr = null;
+  while (i < points.length || j < prices.length) {
+    const ti = i < points.length ? points[i].ts : Infinity;
+    const tj = j < prices.length ? prices[j].ts : Infinity;
+    const ts = Math.min(ti, tj);
+    if (ti === ts) pt = points[i++];
+    if (tj === ts) pr = prices[j++];
+    if (!pr || pt.ts > ts) continue;
+    const p = { ts, total: pt.total * pr.price, shares: pt.total, price: pr.price, holders: pt.holders,
+      top: pt.top.map(([n, v]) => [n, v * pr.price]) };
+    if (out.length && out[out.length - 1].ts === ts) out[out.length - 1] = p; else out.push(p);
+  }
+  return out;
+}
+
+/** Last price at or before ts, or null. */
+function shPriceAt(prices, ts) {
+  if (!prices.length || prices[0].ts > ts) return null;
+  return shValueAt(prices, ts).price;
 }
 
 /** Last point at or before ts (step-after semantics). */
@@ -1944,24 +2012,40 @@ function shTimeTicks(t0, t1, plotW = 700) {
 
 function shGeometry(width, height) {
   const data = shState.data;
-  const visible = shState.series.filter(s => !shState.hidden.has(s.oi));
+  const visible = shState.series.filter(s => !shState.hidden.has(s.oi) && shPts(s).length);
   const t0 = data.since;
   const t1 = Math.max(data.asof, data.since + 60);
   // Vertical autoscale: min..max of the visible series over the shown period.
   let min = Infinity, max = -Infinity;
-  for (const s of visible) for (const p of s.points) { min = Math.min(min, p.total); max = Math.max(max, p.total); }
+  for (const s of visible) for (const p of shPts(s)) { min = Math.min(min, p.total); max = Math.max(max, p.total); }
   if (!Number.isFinite(min)) { min = 0; max = 1; }
   const pad = (max - min) * 0.08 || Math.max(Math.abs(max) * 0.05, 1);
   const yStep = shNiceStep(max - min + 2 * pad, 5);
   const y0 = Math.max(0, Math.floor((min - pad) / yStep) * yStep);
   const y1 = Math.ceil((max + pad) / yStep) * yStep;
-  const plotW = width - SH_PAD.left - SH_PAD.right;
+  const priceAxis = shState.showPrice ? shPriceScale(visible) : null;
+  const plotW = width - SH_PAD.left - SH_PAD.right - (priceAxis ? SH_PRICE_AXIS_W : 0);
   const plotH = height - SH_PAD.top - SH_PAD.bottom;
   return {
-    visible, t0, t1, y0, y1, yStep, plotW, plotH,
+    visible, t0, t1, y0, y1, yStep, plotW, plotH, priceAxis,
     x: t => SH_PAD.left + ((t - t0) / (t1 - t0)) * plotW,
     y: v => SH_PAD.top + (1 - (v - y0) / (y1 - y0 || 1)) * plotH,
+    py: p => SH_PAD.top + (1 - (p - priceAxis.p0) / (priceAxis.p1 - priceAxis.p0 || 1)) * plotH,
     tAt: px => t0 + ((px - SH_PAD.left) / plotW) * (t1 - t0)
+  };
+}
+
+/** Right-axis scale for the price overlay: autoscaled to the visible outcomes, within 0..1. */
+function shPriceScale(visible) {
+  let min = Infinity, max = -Infinity;
+  for (const s of visible) for (const p of s.prices) { min = Math.min(min, p.price); max = Math.max(max, p.price); }
+  if (!Number.isFinite(min)) return null;
+  const pad = (max - min) * 0.08 || 0.01;
+  const step = Math.max(shNiceStep(max - min + 2 * pad, 5), 0.001);
+  return {
+    step,
+    p0: Math.max(0, Math.floor((min - pad) / step) * step),
+    p1: Math.min(1, Math.ceil((max + pad) / step) * step)
   };
 }
 
@@ -1983,7 +2067,15 @@ function shDraw(ctx, width, height, hoverTs, opaque = false) {
   for (let v = g.y0; v <= g.y1 + g.yStep / 2; v += g.yStep) {
     const y = Math.round(g.y(v)) + 0.5;
     ctx.beginPath(); ctx.moveTo(SH_PAD.left, y); ctx.lineTo(SH_PAD.left + g.plotW, y); ctx.stroke();
-    ctx.fillText(shFormatShares(v), SH_PAD.left - 10, y);
+    ctx.fillText(shFormatValue(v), SH_PAD.left - 10, y);
+  }
+  // Right axis: outcome price (no grid lines — the left axis owns the grid)
+  if (g.priceAxis) {
+    const { p0, p1, step } = g.priceAxis;
+    ctx.textAlign = 'left';
+    for (let i = 0, p = p0; p <= p1 + step / 2; p = p0 + step * ++i) {
+      ctx.fillText(shFormatPrice(p, step), SH_PAD.left + g.plotW + 8, Math.round(g.py(p)) + 0.5);
+    }
   }
   // X labels
   const { ticks, withDate } = shTimeTicks(g.t0, g.t1, g.plotW);
@@ -1991,28 +2083,45 @@ function shDraw(ctx, width, height, hoverTs, opaque = false) {
   ctx.textBaseline = 'top';
   for (const t of ticks) ctx.fillText(shFormatTime(t, withDate), g.x(t), SH_PAD.top + g.plotH + 8);
 
+  const stepLine = (pts, val, yOf) => {
+    ctx.beginPath();
+    pts.forEach((p, i) => {
+      const x = g.x(Math.max(p.ts, g.t0)), y = yOf(val(p));
+      if (i === 0) ctx.moveTo(x, y);
+      else { ctx.lineTo(x, yOf(val(pts[i - 1]))); ctx.lineTo(x, y); }
+    });
+    ctx.lineTo(g.x(g.t1), yOf(val(pts[pts.length - 1])));
+    ctx.stroke();
+  };
+  ctx.lineJoin = 'round';
+
+  // Price overlay: thin, translucent, same outcome colour — under the main lines
+  if (g.priceAxis) {
+    ctx.save();
+    ctx.globalAlpha = SH_PRICE_ALPHA;
+    ctx.lineWidth = 1.25;
+    for (const s of g.visible) {
+      if (!s.prices.length) continue;
+      ctx.strokeStyle = theme.series[s.oi % theme.series.length];
+      stepLine(s.prices, p => p.price, g.py);
+    }
+    ctx.restore();
+  }
+
   // Step lines, 2px, color by outcome slot
   for (const s of g.visible) {
-    const color = theme.series[s.oi % theme.series.length];
-    ctx.strokeStyle = color;
+    ctx.strokeStyle = theme.series[s.oi % theme.series.length];
     ctx.lineWidth = 2;
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    s.points.forEach((p, i) => {
-      const x = g.x(Math.max(p.ts, g.t0)), y = g.y(p.total);
-      if (i === 0) ctx.moveTo(x, y);
-      else { ctx.lineTo(x, g.y(s.points[i - 1].total)); ctx.lineTo(x, y); }
-    });
-    const last = s.points[s.points.length - 1];
-    ctx.lineTo(g.x(g.t1), g.y(last.total));
-    ctx.stroke();
+    stepLine(shPts(s), p => p.total, g.y);
   }
 
   // Direct end labels (≤4 series), nudged apart so they never overlap
   ctx.font = '600 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  const labelX = SH_PAD.left + g.plotW + (g.priceAxis ? SH_PRICE_AXIS_W : 0);
   const labels = g.visible.map(s => {
-    const last = s.points[s.points.length - 1];
-    return { s, y: g.y(last.total), text: `${s.name} ${shFormatShares(last.total)}` };
+    const pts = shPts(s);
+    const last = pts[pts.length - 1];
+    return { s, y: g.y(last.total), text: `${s.name} ${shFormatValue(last.total)}` };
   }).sort((a, b) => a.y - b.y);
   for (let i = 1; i < labels.length; i++) labels[i].y = Math.max(labels[i].y, labels[i - 1].y + 16);
   ctx.textAlign = 'left';
@@ -2020,9 +2129,9 @@ function shDraw(ctx, width, height, hoverTs, opaque = false) {
   for (const l of labels) {
     const color = theme.series[l.s.oi % theme.series.length];
     ctx.fillStyle = color;
-    ctx.beginPath(); ctx.arc(SH_PAD.left + g.plotW + 8, l.y, 3.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(labelX + 8, l.y, 3.5, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = theme.text2;
-    ctx.fillText(l.text, SH_PAD.left + g.plotW + 15, l.y);
+    ctx.fillText(l.text, labelX + 15, l.y);
   }
 
   // Hover crosshair + markers with a surface ring
@@ -2034,8 +2143,17 @@ function shDraw(ctx, width, height, hoverTs, opaque = false) {
     ctx.beginPath(); ctx.moveTo(x, SH_PAD.top); ctx.lineTo(x, SH_PAD.top + g.plotH); ctx.stroke();
     ctx.setLineDash([]);
     for (const s of g.visible) {
-      const p = shValueAt(s.points, hoverTs);
-      ctx.fillStyle = theme.series[s.oi % theme.series.length];
+      const color = theme.series[s.oi % theme.series.length];
+      const pr = g.priceAxis ? shPriceAt(s.prices, hoverTs) : null;
+      if (pr != null) {
+        ctx.save();
+        ctx.globalAlpha = SH_PRICE_ALPHA;
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.arc(x, g.py(pr), 3, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      }
+      const p = shValueAt(shPts(s), hoverTs);
+      ctx.fillStyle = color;
       ctx.strokeStyle = theme.bg;
       ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(x, g.y(p.total), 4.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
@@ -2126,9 +2244,25 @@ async function loadShareHistory({ silent = false } = {}) {
     return;
   }
   shState.series = shBuildSeries(data);
+  shRefreshView();
+}
+
+/** Legend + empty-state + redraw for the current unit / price toggles. */
+function shRefreshView() {
+  const d = shState.data;
+  const title = document.querySelector('.sh-title');
+  if (title) title.textContent = shState.unit === 'usd' ? 'Value of shares held by tracked traders (USDT)' : 'Shares held by tracked traders';
+  if (!d?.tracked) return;
   shRenderLegend();
-  shShowMessage(shState.series.length ? '' : 'No tracked trader has held this market yet.');
-  shRender();
+  let msg = '';
+  if (!shState.series.length) msg = 'No tracked trader has held this market yet.';
+  else if (shState.unit === 'usd' && !shState.series.some(s => s.vpoints.length)) {
+    msg = d.pricesPending
+      ? 'Price history for this market is still being collected — the USDT view fills in within a few minutes.'
+      : 'No price history is available for this market.';
+  }
+  shShowMessage(msg);
+  if (!msg) shRender();
 }
 
 /** Panel heading = the exact market being studied, linked to Polymarket. */
@@ -2189,13 +2323,19 @@ function shOnHover(ev) {
   const withDate = (g.t1 - g.t0) > 86400 ? 'full' : false;
   tip.innerHTML = `<div class="sh-tip-time">${shFormatTime(shState.hoverTs, withDate || 'full')}</div>` +
     g.visible.map(s => {
-      const p = shValueAt(s.points, shState.hoverTs);
-      const first = s.points[0].total;
+      const pts = shPts(s);
+      const p = shValueAt(pts, shState.hoverTs);
+      const first = pts[0].total;
       const delta = p.total - first;
-      const deltaTxt = first || delta ? ` <span class="sh-tip-delta">${delta >= 0 ? '+' : '−'}${shFormatShares(Math.abs(delta))} vs start</span>` : '';
+      const usd = shState.unit === 'usd';
+      const deltaTxt = first || delta ? ` <span class="sh-tip-delta">${delta >= 0 ? '+' : '−'}${shFormatValue(Math.abs(delta))} vs start</span>` : '';
+      const price = shPriceAt(s.prices, shState.hoverTs);
+      const detail = [usd ? `${formatShares(p.shares)} shares` : '', price != null ? `@ ${(price * 100).toFixed(1)}¢` : '']
+        .filter(Boolean).join(' ');
       return `<div class="sh-tip-row"><span class="sh-swatch" style="background:${theme.series[s.oi % theme.series.length]}"></span>
-        <span class="sh-tip-name">${escapeHtml(s.name)}</span><strong>${formatShares(p.total)}</strong>${deltaTxt}</div>
-        <div class="sh-tip-holders">${p.holders} holder${p.holders === 1 ? '' : 's'}${p.top.length ? ' · ' + p.top.map(([n, v]) => `${escapeHtml(n)} ${shFormatShares(v)}`).join(', ') : ''}</div>`;
+        <span class="sh-tip-name">${escapeHtml(s.name)}</span><strong>${usd ? formatUSD(p.total) : formatShares(p.total)}</strong>${deltaTxt}</div>
+        ${detail ? `<div class="sh-tip-holders sh-tip-price">${detail}</div>` : ''}
+        <div class="sh-tip-holders">${p.holders} holder${p.holders === 1 ? '' : 's'}${p.top.length ? ' · ' + p.top.map(([n, v]) => `${escapeHtml(n)} ${shFormatValue(v)}`).join(', ') : ''}</div>`;
     }).join('');
   tip.hidden = false;
   const x = g.x(shState.hoverTs);
@@ -2229,14 +2369,16 @@ function downloadShareHistory() {
   ctx.fillStyle = theme.text2;
   ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
   const legend = shGeometry(width, chartH).visible.map(s => s.name).join(' / ');
-  ctx.fillText(`Shares held by tracked ${SITE.siteName} traders · ${legend} · ${rangeLabel} · as of ${new Date(d.asof * 1000).toLocaleString()}`, 16, 33, width - 32);
+  const what = shState.unit === 'usd' ? `Value (USDT) of shares held by tracked ${SITE.siteName} traders` : `Shares held by tracked ${SITE.siteName} traders`;
+  const priceNote = shState.showPrice ? ' · outcome price on right axis' : '';
+  ctx.fillText(`${what} · ${legend}${priceNote} · ${rangeLabel} · as of ${new Date(d.asof * 1000).toLocaleString()}`, 16, 33, width - 32);
 
   ctx.save();
   ctx.translate(0, headH);
   shDraw(ctx, width, chartH, null, true);
   ctx.restore();
 
-  const name = `${SITE.siteId}_shares_${(d.market.slug || d.market.cid.slice(0, 10)).slice(0, 60)}_${shState.range}.png`;
+  const name = `${SITE.siteId}_${shState.unit === 'usd' ? 'value' : 'shares'}_${(d.market.slug || d.market.cid.slice(0, 10)).slice(0, 60)}_${shState.range}.png`;
   const url = canvas.toDataURL('image/png');
   const a = document.createElement('a');
   a.href = url;
@@ -2253,6 +2395,25 @@ function initShareHistory() {
     document.querySelectorAll('.sh-range').forEach(b => b.classList.toggle('active', b === btn));
     loadShareHistory();
   }));
+  const syncToggles = () => {
+    document.querySelectorAll('.sh-unit').forEach(b => b.classList.toggle('active', b.dataset.unit === shState.unit));
+    const pb = document.querySelector('.sh-price-btn');
+    if (pb) { pb.classList.toggle('active', shState.showPrice); pb.setAttribute('aria-pressed', String(shState.showPrice)); }
+  };
+  syncToggles();
+  document.querySelectorAll('.sh-unit').forEach(btn => btn.addEventListener('click', () => {
+    if (btn.dataset.unit === shState.unit) return;
+    shState.unit = btn.dataset.unit;
+    shSavePrefs();
+    syncToggles();
+    shRefreshView();
+  }));
+  document.querySelector('.sh-price-btn')?.addEventListener('click', () => {
+    shState.showPrice = !shState.showPrice;
+    shSavePrefs();
+    syncToggles();
+    shRefreshView();
+  });
   document.querySelectorAll('.sh-dl').forEach(btn =>
     btn.addEventListener('click', () => downloadShareHistory()));
   document.getElementById('sh-legend')?.addEventListener('click', ev => {

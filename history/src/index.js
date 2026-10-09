@@ -24,6 +24,8 @@
  * binding, behind the member gate):
  *   GET /history?site=core&cid=0x…&range=1d|1w|1m|max
  *   GET /markets?site=core&status=active|closed     (archive listing)
+ *   (the /history response also carries each outcome's price series — see
+ *    PRICES below — for the chart's USDT mode and price overlay)
  *   GET /status
  *   GET /holders-pnl?cid=0x…&n=10|20|50[&force=1]   top-n holders per outcome
  *                              (Polymarket-wide, not just tracked traders) with each
@@ -421,6 +423,173 @@ async function holdersPnl(env, url) {
   return json({ cid, n, rankedAt, asOf, outcomes, meta, forceCooldownS: FORCE_COOLDOWN_S }, 200, force || failed ? 0 : 30);
 }
 
+// ─── Prices ──────────────────────────────────────────────────────────────────
+// Per-outcome token prices, shared by both sites (ptokens is keyed by cid+oi).
+//   Live:     every PRICE_EVERY_MIN minutes, CLOB /midpoints (≤500 tokens per
+//             POST) for every token of an active market; a row is written only
+//             when the price moved ≥ PRICE_EPS — same change-only model as holdings.
+//   Backfill: CLOB /prices-history takes ≤15-day windows (longer → 400 "interval
+//             is too long"; interval=max returns only ~30 days), so each token
+//             walks bf_from → bf_to in 14-day chunks, a few dozen chunks per tick:
+//             hourly fidelity, 5-min for the last 7 days before bf_to. bf_to = the
+//             moment live sampling took over (or the close time for archived
+//             markets), so backfill and live meet without overlap.
+//   Tokens:   Gamma clobTokenIds (index = outcomeIndex); Gamma's /markets hides
+//             closed markets unless closed=true, so both variants are queried.
+
+const CLOB = 'https://clob.polymarket.com';
+const PRICE_EVERY_MIN = 2;
+const PRICE_EPS = 0.0005;
+const TOKEN_SYNC_EVERY_MIN = 5;
+const MIDPOINTS_MAX = 500;
+const BF_CHUNK_S = 14 * 86400;
+const BF_FINE_S = 7 * 86400;
+const BF_LEAD_S = 3600;            // start a little before first_ts so the chart's left edge has a price
+const BF_PER_TICK = 60;
+const BF_CONCURRENCY = 8;
+
+const round4 = (v) => Math.round(v * 10000) / 10000;
+
+async function gammaTokens(cids) {
+  const out = new Map();
+  for (let i = 0; i < cids.length; i += GAMMA_CHUNK) {
+    const q = cids.slice(i, i + GAMMA_CHUNK).map((c) => 'condition_ids=' + c).join('&');
+    for (const closed of ['false', 'true']) {
+      const r = await fetch(`${GAMMA}/markets?closed=${closed}&limit=${GAMMA_CHUNK * 2}&${q}`, {
+        headers: { 'User-Agent': 'pm-share-history/1.0' },
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!r.ok) throw new Error(`gamma ${r.status}`);
+      for (const m of await r.json()) {
+        try {
+          const ids = JSON.parse(m.clobTokenIds || '[]');
+          if (m.conditionId && ids.length) out.set(m.conditionId, ids);
+        } catch { /* malformed → retried next sync */ }
+      }
+    }
+  }
+  return out;
+}
+
+/** Register token ids for tracked markets that have none yet. */
+async function syncTokens(env, nowS) {
+  const db = env.DB;
+  const missing = (await db.prepare(
+    `SELECT cid, MIN(first_ts) AS first_ts, MAX(status = 'active') AS active, MAX(closed_ts) AS closed_ts
+       FROM markets WHERE cid NOT IN (SELECT cid FROM ptokens) GROUP BY cid LIMIT 200`).all()).results;
+  if (!missing.length) return 0;
+  const tokens = await gammaTokens(missing.map((m) => m.cid));
+  const rows = [];
+  for (const m of missing) {
+    const ids = tokens.get(m.cid);
+    if (!ids) continue;
+    const bfTo = m.active ? nowS : (m.closed_ts || nowS);
+    ids.forEach((token, oi) => rows.push([m.cid, oi, String(token), m.first_ts - BF_LEAD_S, bfTo]));
+  }
+  if (rows.length) await db.batch(multiInsert(db, 'INSERT OR IGNORE INTO ptokens (cid, oi, token, bf_from, bf_to)', '', rows));
+  return rows.length;
+}
+
+/** Live midpoints for every token of an active market; change-only rows. */
+async function samplePrices(env, nowS) {
+  const db = env.DB;
+  const toks = (await db.prepare(
+    `SELECT id, cid, oi, token, last_price FROM ptokens
+      WHERE cid IN (SELECT cid FROM markets WHERE status = 'active')`).all()).results;
+  const rows = [], upd = [];
+  for (let i = 0; i < toks.length; i += MIDPOINTS_MAX) {
+    const chunk = toks.slice(i, i + MIDPOINTS_MAX);
+    const r = await fetch(`${CLOB}/midpoints`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'User-Agent': 'pm-share-history/1.0' },
+      body: JSON.stringify(chunk.map((t) => ({ token_id: t.token }))),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!r.ok) throw new Error(`midpoints ${r.status}`);
+    const mids = await r.json();
+    for (const t of chunk) {
+      const p = round4(Number(mids[t.token]));
+      if (!Number.isFinite(p) || mids[t.token] == null) continue;   // no book (halted/closing)
+      if (t.last_price != null && Math.abs(p - t.last_price) < PRICE_EPS) continue;
+      rows.push([t.id, nowS, p]);
+      upd.push([t.id, t.cid, t.oi, t.token, p, nowS]);
+    }
+  }
+  const stmts = [
+    ...multiInsert(db, 'INSERT OR REPLACE INTO prices (pid, ts, price)', '', rows),
+    ...multiInsert(db, 'INSERT INTO ptokens (id, cid, oi, token, last_price, last_ts)',
+      'ON CONFLICT(id) DO UPDATE SET last_price = excluded.last_price, last_ts = excluded.last_ts', upd),
+  ];
+  if (stmts.length) await db.batch(stmts);
+  return { tokens: toks.length, changed: rows.length };
+}
+
+/** One /prices-history chunk per pending token, BF_PER_TICK tokens per tick. */
+async function backfillPrices(env) {
+  const db = env.DB;
+  const pending = (await db.prepare(
+    `SELECT id, token, bf_from, bf_to FROM ptokens WHERE bf_from < bf_to ORDER BY bf_to DESC, id LIMIT ?`)
+    .bind(BF_PER_TICK).all()).results;
+  if (!pending.length) return null;
+  const rows = [], done = [];
+  let failed = 0;
+  await pool(pending, BF_CONCURRENCY, async (t) => {
+    const start = t.bf_from;
+    const end = Math.min(start + BF_CHUNK_S, t.bf_to);
+    const fidelity = end > t.bf_to - BF_FINE_S ? 5 : 60;
+    try {
+      const r = await fetch(`${CLOB}/prices-history?market=${t.token}&startTs=${start}&endTs=${end}&fidelity=${fidelity}`, {
+        headers: { 'User-Agent': 'pm-share-history/1.0' },
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const hist = (await r.json()).history || [];
+      let prev = null;
+      for (const { t: ts, p } of hist) {
+        if (ts < start || ts > end) continue;          // the API appends a "now" point past endTs
+        const v = round4(Number(p));
+        if (!Number.isFinite(v) || (prev !== null && Math.abs(v - prev) < PRICE_EPS)) continue;
+        rows.push([t.id, ts, v]);
+        prev = v;
+      }
+      done.push([t.id, end]);
+    } catch (err) {
+      failed++;                                        // retried next tick
+    }
+  });
+  const stmts = multiInsert(db, 'INSERT OR IGNORE INTO prices (pid, ts, price)', '', rows);
+  for (const [id, end] of done) stmts.push(db.prepare('UPDATE ptokens SET bf_from = ? WHERE id = ?').bind(end, id));
+  if (stmts.length) await db.batch(stmts);
+  return { chunks: done.length, rows: rows.length, failed };
+}
+
+async function pricesTick(env, nowS) {
+  const minute = Math.floor(nowS / 60);
+  const out = {};
+  if (minute % TOKEN_SYNC_EVERY_MIN === 0) out.tokens = await syncTokens(env, nowS);
+  if (minute % PRICE_EVERY_MIN === 0) out.live = await samplePrices(env, Math.floor(nowS / 60) * 60);
+  out.backfill = await backfillPrices(env);
+  return out;
+}
+
+/** Price step series per outcome over [since, asof] (first point clamped to since). */
+async function priceSeries(db, cid, since, asof) {
+  const toks = (await db.prepare('SELECT id, oi, bf_from, bf_to FROM ptokens WHERE cid = ?').bind(cid).all()).results;
+  const out = {};
+  let pending = false;
+  await Promise.all(toks.map(async (t) => {
+    if (t.bf_from < t.bf_to) pending = true;
+    const [base, rows] = await Promise.all([
+      db.prepare('SELECT ts, price FROM prices WHERE pid = ? AND ts < ? ORDER BY ts DESC LIMIT 1').bind(t.id, since).first(),
+      db.prepare('SELECT ts, price FROM prices WHERE pid = ? AND ts >= ? AND ts <= ? ORDER BY ts').bind(t.id, since, asof).all(),
+    ]);
+    const pts = rows.results.map((r) => [r.ts, r.price]);
+    if (base && (!pts.length || pts[0][0] > since)) pts.unshift([since, base.price]);
+    out[t.oi] = pts;
+  }));
+  return { prices: out, pricesPending: pending || !toks.length };
+}
+
 // ─── Read API ────────────────────────────────────────────────────────────────
 
 function json(body, status = 200, maxAge = 0) {
@@ -459,6 +628,7 @@ async function history(env, url) {
   ]);
 
   const used = new Set([...baseline.results, ...rows.results].map((r) => r.tid));
+  const { prices, pricesPending } = await priceSeries(db, m.cid, since, asof);
   return json({
     tracked: true,
     market: {
@@ -470,6 +640,7 @@ async function history(env, url) {
     traders: Object.fromEntries(traders.results.filter((t) => used.has(t.id)).map((t) => [t.id, t.addr])),
     baseline: baseline.results.filter((r) => r.size > 0).map((r) => [r.oi, r.tid, r.size]),
     rows: rows.results.map((r) => [r.ts, r.oi, r.tid, r.size]),
+    prices, pricesPending,
   }, 200, 30);
 }
 
@@ -487,12 +658,14 @@ async function listMarkets(env, url) {
 }
 
 async function status(env) {
-  const [cursors, counts, rows] = await Promise.all([
+  const [cursors, counts, rows, ptok] = await Promise.all([
     env.DB.prepare('SELECT * FROM cursors').all(),
     env.DB.prepare('SELECT site, status, COUNT(*) AS n FROM markets GROUP BY site, status').all(),
     env.DB.prepare('SELECT COUNT(*) AS n FROM holdings').first(),
+    env.DB.prepare(`SELECT COUNT(*) AS tokens, SUM(bf_from < bf_to) AS backfilling, MAX(last_ts) AS lastLive,
+                           (SELECT COUNT(*) FROM prices) AS priceRows FROM ptokens`).first(),
   ]);
-  return json({ cursors: cursors.results, markets: counts.results, holdingRows: rows.n });
+  return json({ cursors: cursors.results, markets: counts.results, holdingRows: rows.n, prices: ptok });
 }
 
 export default {
@@ -504,6 +677,12 @@ export default {
       } catch (err) {
         console.error(`${site}: ingest failed: ${err.stack || err.message}`);
       }
+    }
+    try {
+      const r = await pricesTick(env, Math.floor(Date.now() / 1000));
+      if (r.tokens || r.backfill) console.log('prices ' + JSON.stringify(r));
+    } catch (err) {
+      console.warn(`prices tick failed: ${err.message}`);   // transient upstream; next tick retries
     }
   },
 

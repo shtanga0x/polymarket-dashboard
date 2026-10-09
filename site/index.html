@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/style.css?v=unified-20261008a">
+  <link rel="stylesheet" href="assets/style.css?v=unified-20261009a">
 </head>
 <body>
   <div class="top-shell">
@@ -191,6 +191,13 @@
                   <button type="button" class="sh-range" data-range="1w">1W</button>
                   <button type="button" class="sh-range" data-range="1m">1M</button>
                   <button type="button" class="sh-range" data-range="max">Max</button>
+                </div>
+                <div class="sh-ranges" role="group" aria-label="Units">
+                  <button type="button" class="sh-unit active" data-unit="shares" title="Number of shares held">Shares</button>
+                  <button type="button" class="sh-unit" data-unit="usd" title="Value of the shares held (shares × outcome price)">USDT</button>
+                </div>
+                <div class="sh-ranges">
+                  <button type="button" class="sh-price-btn" aria-pressed="false" title="Show/hide the outcome prices on a right-hand axis">Price</button>
                 </div>
                 <button type="button" class="filter-btn sh-dl" title="Download the chart as PNG">⤓ PNG</button>
               </div>
@@ -457,6 +464,6 @@
   </footer>
 
   <script src="assets/site-config.js"></script>
-  <script src="assets/app.js?v=unified-20261008a"></script>
+  <script src="assets/app.js?v=unified-20261009a"></script>
 </body>
 </html>

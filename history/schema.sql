@@ -71,3 +71,27 @@ CREATE TABLE IF NOT EXISTS holders_pnl_cache (
   ts   INTEGER NOT NULL,
   body TEXT NOT NULL
 );
+
+-- Outcome prices (YES/NO token price history) for the chart's USDT mode and
+-- price overlay. One row per (market, outcome) token, shared by both sites.
+-- Live: CLOB /midpoints every 2 min for tokens of active markets (change-only).
+-- Backfill: CLOB /prices-history in ≤14-day chunks from the earliest first_ts
+-- up to bf_to (live sampling start, or close time for archived markets);
+-- bf_from is the cursor — the token is fully backfilled once bf_from >= bf_to.
+CREATE TABLE IF NOT EXISTS ptokens (
+  id         INTEGER PRIMARY KEY,
+  cid        TEXT    NOT NULL,
+  oi         INTEGER NOT NULL,
+  token      TEXT    NOT NULL,
+  last_price REAL,
+  last_ts    INTEGER,
+  bf_from    INTEGER,
+  bf_to      INTEGER,
+  UNIQUE (cid, oi)
+);
+CREATE TABLE IF NOT EXISTS prices (
+  pid   INTEGER NOT NULL,
+  ts    INTEGER NOT NULL,
+  price REAL    NOT NULL,
+  PRIMARY KEY (pid, ts)
+) WITHOUT ROWID;

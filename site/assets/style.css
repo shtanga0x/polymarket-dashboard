@@ -1216,7 +1216,7 @@ th.sortable.sorted {
   border-radius: 6px;
   overflow: hidden;
 }
-.sh-range {
+.sh-range, .sh-unit, .sh-price-btn {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: none;
@@ -1225,9 +1225,9 @@ th.sortable.sorted {
   font-size: 0.8rem;
   cursor: pointer;
 }
-.sh-range:last-child { border-right: none; }
-.sh-range:hover { color: var(--text-primary); }
-.sh-range.active { background: var(--accent-blue); color: #fff; }
+.sh-range:last-child, .sh-unit:last-child, .sh-price-btn { border-right: none; }
+.sh-range:hover, .sh-unit:hover, .sh-price-btn:hover { color: var(--text-primary); }
+.sh-range.active, .sh-unit.active, .sh-price-btn.active { background: var(--accent-blue); color: #fff; }
 .sh-dl:disabled { opacity: 0.45; cursor: default; }
 .sh-legend { display: flex; flex-wrap: wrap; gap: 0.35rem 1rem; margin-bottom: 0.25rem; min-height: 1.4rem; }
 .sh-legend-item {
@@ -1274,6 +1274,7 @@ th.sortable.sorted {
 .sh-tip-row { display: flex; align-items: center; gap: 0.4rem; }
 .sh-tip-name { color: var(--text-secondary); }
 .sh-tip-delta { color: var(--text-muted); font-weight: 400; }
+.sh-tip-holders.sh-tip-price { color: var(--text-secondary); margin-bottom: 0.1rem; }
 .sh-tip-holders { color: var(--text-muted); margin: 0.1rem 0 0.35rem 1.05rem; }
 @media (max-width: 640px) {
   .sh-plot { height: 220px; }
