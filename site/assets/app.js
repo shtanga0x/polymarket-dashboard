@@ -2827,24 +2827,34 @@ async function fetchUsdcBalance(address) {
 }
 
 /**
- * Fetch positions for a wallet from Polymarket API (null-safe: always an array)
+ * Fetch positions for a wallet from Polymarket Data API v2 (null-safe: always
+ * an array), mapped to the v1 camelCase shape the checker reads. Same rule as
+ * the server pipeline: redeemables + the first OPEN page in full, later OPEN
+ * pages live-only (OPEN also lists resolved dust).
  */
 async function fetchCheckerPositions(address) {
-  const user = address.toLowerCase();
+  const base = `${DATA_API_BASE}/v2/positions?user=${address.toLowerCase()}&filter_type=TOKENS&filter_amount=1&limit=500`;
   const get = async (url) => {
     const response = await fetch(url);
     if (!response.ok) throw new Error('Failed to fetch positions');
-    return (await response.json()) || [];
+    return (await response.json()) || {};
   };
-  const data = await get(`${DATA_API_BASE}/positions?user=${user}&limit=500`);
-  if (data.length < 500) return data;
-  // Full page → more than 500 positions, the first page mostly resolved dust.
-  // Page in every live position (same rule as the server pipeline).
-  const seen = new Set(data.map(p => p.asset));
-  for (let offset = 0; offset < 15000; offset += 500) {
-    const live = await get(`${DATA_API_BASE}/positions?user=${user}&limit=500&offset=${offset}&redeemable=false`);
-    for (const p of live) if (!seen.has(p.asset)) { seen.add(p.asset); data.push(p); }
-    if (live.length < 500) break;
+  const v1 = r => ({
+    asset: r.token_id, conditionId: r.condition_id, size: r.current_size, avgPrice: r.avg_price,
+    currentValue: r.current_value, cashPnl: r.unrealized_pnl, curPrice: r.current_price,
+    redeemable: r.redeemable, title: r.title, slug: r.slug, icon: r.icon, eventSlug: r.event_slug,
+    outcome: r.outcome, outcomeIndex: r.outcome_index, endDate: r.end_date
+  });
+  const data = [];
+  const seen = new Set();
+  const add = r => { if (!seen.has(r.token_id)) { seen.add(r.token_id); data.push(v1(r)); } };
+  ((await get(`${base}&status=REDEEMABLE`)).data || []).forEach(add);
+  let url = `${base}&status=OPEN`;
+  for (let page = 0; url && page < 30; page++) {
+    const body = await get(url);
+    for (const r of body.data || []) if (page === 0 || !r.redeemable) add(r);
+    const cursor = body.pagination?.next_cursor;
+    url = cursor ? `${base}&status=OPEN&cursor=${encodeURIComponent(cursor)}` : null;
   }
   return data;
 }
@@ -2853,12 +2863,11 @@ async function fetchCheckerPositions(address) {
  * Fetch portfolio value for a wallet
  */
 async function fetchCheckerValue(address) {
-  const url = `${DATA_API_BASE}/value?user=${address.toLowerCase()}`;
+  const url = `${DATA_API_BASE}/v2/value?user=${address.toLowerCase()}`;
   const response = await fetch(url);
   if (!response.ok) return 0;
-  const data = (await response.json()) || [];
-  if (!data || data.length === 0) return 0;
-  return parseFloat(data[0]?.value || 0);
+  const value = parseFloat((await response.json())?.data?.value);
+  return Number.isFinite(value) ? value : 0;
 }
 
 /**
