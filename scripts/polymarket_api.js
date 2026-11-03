@@ -153,10 +153,57 @@ async function fetchWithRetry(url, options = {}, config = {}) {
 /**
  * Fetch current positions for a wallet
  * @param {string} address - Wallet address (0x...)
- * @param {number} limit - Max results (default 500 — data-api rejects >500 with HTTP 400)
+ * @param {number} limit - Page size (v2 allows up to 1000)
  * @param {object} config - Config object
  * @returns {Promise<Array>} Array of position objects
  */
+// Data API v2 wraps every payload in `data` (paged routes add `pagination`
+// with an opaque `next_cursor`) and returns snake_case rows. The pipeline and
+// the published JSON keep the v1 camelCase shapes, so rows are mapped back here.
+async function fetchV2(url, config) {
+  const body = await fetchWithRetry(url, {}, config);
+  return body?.data ?? null;
+}
+
+async function fetchV2Pages(url, maxPages, config) {
+  const rows = [];
+  let cursor = null;
+  for (let page = 0; page < maxPages; page++) {
+    const body = await fetchWithRetry(cursor ? `${url}&cursor=${encodeURIComponent(cursor)}` : url, {}, config);
+    if (Array.isArray(body?.data)) rows.push(...body.data);
+    cursor = body?.pagination?.next_cursor;
+    if (!cursor) break;
+  }
+  return rows;
+}
+
+function v1Position(r) {
+  const size = Number(r.current_size) || 0;
+  const avgPrice = Number(r.avg_price) || 0;
+  const initialValue = size * avgPrice;
+  return {
+    proxyWallet: r.proxy_wallet, asset: r.token_id, conditionId: r.condition_id,
+    size, avgPrice, initialValue, currentValue: r.current_value,
+    cashPnl: r.unrealized_pnl, percentPnl: r.percent_pnl, totalBought: r.total_size,
+    realizedPnl: r.realized_pnl, percentRealizedPnl: r.percent_realized_pnl,
+    curPrice: r.current_price, redeemable: r.redeemable, mergeable: r.mergeable,
+    title: r.title, slug: r.slug, icon: r.icon, eventId: r.event_id, eventSlug: r.event_slug,
+    outcome: r.outcome, outcomeIndex: r.outcome_index, oppositeOutcome: r.opposite_outcome,
+    oppositeAsset: r.opposite_token_id, endDate: r.end_date, negativeRisk: r.negative_risk,
+  };
+}
+
+function v1Activity(r) {
+  return {
+    proxyWallet: r.proxy_wallet, timestamp: r.timestamp, conditionId: r.condition_id,
+    type: r.type, size: r.size, usdcSize: r.usdc_size, transactionHash: r.transaction_hash,
+    price: r.price, asset: r.token_id, side: r.side, outcomeIndex: r.outcome_index,
+    title: r.title, slug: r.slug, icon: r.icon, eventSlug: r.event_slug, outcome: r.outcome,
+    name: r.name, pseudonym: r.pseudonym, bio: r.bio, profileImage: r.profile_image,
+    profileImageOptimized: r.profile_image_optimized,
+  };
+}
+
 // Fields the pipeline reads from a position (aggregation + exposure). Paged-in
 // extras are slimmed to these: a market-making wallet can add ~6,400 positions,
 // and the full 28-field objects cost ~1 KB each in trader_portfolios.json.
@@ -168,34 +215,35 @@ const slimPosition = p => Object.fromEntries(SLIM_POSITION_FIELDS.filter(k => p[
 
 export async function fetchWalletPositions(address, limit = 500, config = {}) {
   const user = address.toLowerCase();
-  const url = `${DATA_API_BASE}/positions?user=${user}&limit=${limit}`;
-  const data = (await fetchWithRetry(url, {}, config)) || [];
-  if (data.length < limit) return data;
-
-  // A full page means the wallet holds more than `limit` positions, and that
-  // first page is mostly resolved (redeemable) dust — 15 tracked wallets
-  // (2026-10-04) had up to 6,400 LIVE positions (~$611k) silently cut off.
-  // The first page is kept as-is (its redeemables attribute REDEEM events in
-  // recent changes); every live position is then paged in with
-  // redeemable=false and merged by token id.
-  // Pages are fetched in parallel waves (a 6,900-position market maker is 14
-  // pages; sequential paging pushed the watch run past the dispatcher's
-  // 1-minute tick and halved the refresh cadence).
-  const seen = new Set(data.map(p => p.asset));
+  // Data API v1 /positions (retired 2026-11-02) returned open AND resolved
+  // (redeemable) holdings in one list with a 1-share dust floor. v2 splits them
+  // by `status`, so both sets are read with the same floor and merged by token
+  // id. The redeemables attribute REDEEM events in recent changes; every OPEN
+  // position is cursor-paged in (15 tracked wallets hold >500, one ~6,900) and
+  // rows past the first page are slimmed to keep trader_portfolios.json small.
+  const base = `${DATA_API_BASE}/v2/positions?user=${user}&filter_type=TOKENS&filter_amount=1`;
+  const pageSize = Math.min(Math.max(limit, 1), 1000);
   const maxPages = config.positions_max_pages || 30;
-  const WAVE = 4;
-  for (let page = 0; page < maxPages; page += WAVE) {
-    const offsets = Array.from({ length: Math.min(WAVE, maxPages - page) }, (_, i) => (page + i) * limit);
-    const pages = await Promise.all(offsets.map(offset => fetchWithRetry(
-      `${DATA_API_BASE}/positions?user=${user}&limit=${limit}&offset=${offset}&redeemable=false`, {}, config)
-      .then(r => r || [])));
-    for (const live of pages) {
-      for (const p of live) {
-        if (!seen.has(p.asset)) { seen.add(p.asset); data.push(slimPosition(p)); }
-      }
-    }
-    if (pages.some(live => live.length < limit)) break;
-  }
+  const [open, redeemable] = await Promise.all([
+    fetchV2Pages(`${base}&status=OPEN&limit=${pageSize}`, maxPages, config),
+    fetchV2Pages(`${base}&status=REDEEMABLE&limit=${pageSize}`, 1, config),
+  ]);
+  // OPEN also lists still-held resolved positions; past its first page those
+  // are lost dust (a market maker carries ~3,500), so — as v1 did with
+  // redeemable=false paging — later pages keep only live positions.
+  const data = [];
+  const seen = new Set();
+  const add = (row, slim) => {
+    const p = v1Position(row);
+    if (seen.has(p.asset)) return;
+    seen.add(p.asset);
+    data.push(slim ? slimPosition(p) : p);
+  };
+  redeemable.forEach(row => add(row, false));
+  open.forEach((row, i) => {
+    if (i < pageSize) add(row, false);
+    else if (!row.redeemable) add(row, true);
+  });
   return data;
 }
 
@@ -208,12 +256,12 @@ export async function fetchWalletPositions(address, limit = 500, config = {}) {
  * @returns {Promise<Array>} Array of activity objects
  */
 export async function fetchWalletActivity(address, since = null, limit = 100, config = {}) {
-  let url = `${DATA_API_BASE}/activity?user=${address.toLowerCase()}&limit=${limit}`;
+  let url = `${DATA_API_BASE}/v2/activity?user=${address.toLowerCase()}&limit=${Math.min(limit, 1000)}`;
   if (since) {
     url += `&start=${since}`;
   }
-  const data = await fetchWithRetry(url, {}, config);
-  return data || [];
+  const data = await fetchV2(url, config);
+  return Array.isArray(data) ? data.map(v1Activity) : [];
 }
 
 /**
@@ -223,16 +271,10 @@ export async function fetchWalletActivity(address, since = null, limit = 100, co
  * @returns {Promise<number>} Total value in USD
  */
 export async function fetchWalletValue(address, config = {}) {
-  const url = `${DATA_API_BASE}/value?user=${address.toLowerCase()}`;
-  const data = await fetchWithRetry(url, {}, config);
-  if (!data || data.length === 0) {
-    return 0;
-  }
-  try {
-    return parseFloat(data[0]?.value || 0);
-  } catch {
-    return 0;
-  }
+  const url = `${DATA_API_BASE}/v2/value?user=${address.toLowerCase()}`;
+  const data = await fetchV2(url, config);
+  const value = parseFloat(data?.value);
+  return Number.isFinite(value) ? value : 0;
 }
 
 /**
@@ -243,9 +285,9 @@ export async function fetchWalletValue(address, config = {}) {
  * @returns {Promise<Array>} Array of trade objects
  */
 export async function fetchWalletTrades(address, limit = 500, config = {}) {
-  const url = `${DATA_API_BASE}/trades?user=${address.toLowerCase()}&limit=${limit}`;
-  const data = await fetchWithRetry(url, {}, config);
-  return data || [];
+  const url = `${DATA_API_BASE}/v2/trades?user=${address.toLowerCase()}&limit=${Math.min(limit, 1000)}`;
+  const data = await fetchV2(url, config);
+  return Array.isArray(data) ? data.map(v1Activity) : [];
 }
 
 /**
@@ -375,10 +417,10 @@ export async function fetchAllActivity(address, config = {}) {
   const maxIterations = config.activity_max_pages || 30;
 
   for (let i = 0; i < maxIterations; i++) {
-    const url = `${DATA_API_BASE}/activity?user=${address.toLowerCase()}&limit=500&end=${endTimestamp}`;
+    const url = `${DATA_API_BASE}/v2/activity?user=${address.toLowerCase()}&limit=500&end=${endTimestamp}`;
 
     try {
-      const data = await fetchWithRetry(url, {}, config);
+      const data = ((await fetchV2(url, config)) || []).map(v1Activity);
       if (!data || data.length === 0) break;
 
       allActivity.push(...data);
