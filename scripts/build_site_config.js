@@ -24,6 +24,12 @@ const cfgPath = path.join(ROOT_DIR, 'config', `${site}.json`);
 const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
 
 // Only the frontend-relevant subset is exposed to the browser.
+// Midterm events for the Portfolio "Midterms" filter (scripts/build_midterms.js).
+const midtermsPath = path.join(ROOT_DIR, 'config', 'midterms.json');
+const midtermEvents = fs.existsSync(midtermsPath)
+  ? JSON.parse(fs.readFileSync(midtermsPath, 'utf-8')).events.map(e => e.slug)
+  : [];
+
 const siteConfig = {
   siteId: cfg.site_id,
   siteName: cfg.site_name,
@@ -35,6 +41,7 @@ const siteConfig = {
   polymarketReferral: cfg.polymarket_referral,
   inactivityTimeoutMinutes: cfg.inactivity_timeout_minutes,
   autoReloadSeconds: cfg.auto_reload_seconds,
+  midtermEvents,
 };
 
 const out = process.argv[3] || path.join(ROOT_DIR, 'site', 'assets', 'site-config.js');

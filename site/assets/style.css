@@ -485,6 +485,12 @@ main {
   transform: rotate(-90deg);
 }
 
+.midterms-filter-btn {
+  height: 34px;
+  padding: 0 0.75rem;
+  font-size: 0.85rem;
+}
+
 .odds-filter {
   height: 34px;
   background: var(--bg-tertiary);

@@ -1,0 +1,1722 @@
+{
+  "tag": "midterms",
+  "updated": "2026-11-03T21:40:33.080Z",
+  "events": [
+    {
+      "slug": "2026-midterms-house-popular-vote-margin-of-victory-224",
+      "title": "2026 Midterms: House Popular Vote Margin of Victory"
+    },
+    {
+      "slug": "aca-credits-extended-house-winner-2026",
+      "title": "ACA credits extended & House Winner 2026?"
+    },
+    {
+      "slug": "ak-al-house-election-winner",
+      "title": "AK-AL House Election Winner"
+    },
+    {
+      "slug": "al-02-house-election-winner",
+      "title": "AL-02 House Election Winner"
+    },
+    {
+      "slug": "al-03-house-election-winner",
+      "title": "AL-03 House Election Winner"
+    },
+    {
+      "slug": "al-04-house-election-winner",
+      "title": "AL-04 House Election Winner"
+    },
+    {
+      "slug": "al-05-house-election-winner",
+      "title": "AL-05 House Election Winner"
+    },
+    {
+      "slug": "al-07-house-election-winner",
+      "title": "AL-07 House Election Winner"
+    },
+    {
+      "slug": "alabama-governor-margin-of-victory-2026",
+      "title": "Alabama Governor Election Margin of Victory"
+    },
+    {
+      "slug": "alabama-governor-winner-2026",
+      "title": "Alabama Governor Election Winner"
+    },
+    {
+      "slug": "alabama-senate-election-winner-154",
+      "title": "Alabama Senate Election Winner"
+    },
+    {
+      "slug": "alabama-senate-margin-of-victory-2026",
+      "title": "Alabama Senate Election Margin of Victory"
+    },
+    {
+      "slug": "alaska-governor-election-winner",
+      "title": "Alaska Governor Election Winner  "
+    },
+    {
+      "slug": "alaska-senate-election-margin-of-victory-final-round",
+      "title": "Alaska Senate Election Margin of Victory (Final Round)"
+    },
+    {
+      "slug": "alaska-senate-election-margin-of-victory-first-round",
+      "title": "Alaska Senate Election Margin of Victory (First Round)"
+    },
+    {
+      "slug": "alaska-senate-election-winner",
+      "title": "Alaska Senate Election Winner"
+    },
+    {
+      "slug": "another-us-government-shutdown-house-winner-2026",
+      "title": "Another US government shutdown & House Winner 2026?"
+    },
+    {
+      "slug": "ar-02-house-election-winner",
+      "title": "AR-02 House Election Winner"
+    },
+    {
+      "slug": "ar-03-house-margin-of-victory-2026",
+      "title": "AR-03 House Election Margin of Victory"
+    },
+    {
+      "slug": "arizona-governor-election-turnout",
+      "title": "Arizona Governor Election: Turnout"
+    },
+    {
+      "slug": "arizona-governor-margin-of-victory-2026",
+      "title": "Arizona Governor Election Margin of Victory"
+    },
+    {
+      "slug": "arizona-governor-winner-2026",
+      "title": "Arizona Governor Election Winner"
+    },
+    {
+      "slug": "arkansas-senate-election-winner",
+      "title": "Arkansas Senate Election Winner"
+    },
+    {
+      "slug": "arkansas-senate-margin-of-victory-2026",
+      "title": "Arkansas Senate Election Margin of Victory"
+    },
+    {
+      "slug": "az-01-house-election-winner",
+      "title": "AZ-01 House Election Winner"
+    },
+    {
+      "slug": "az-02-house-election-winner",
+      "title": "AZ-02 House Election Winner"
+    },
+    {
+      "slug": "az-09-house-margin-of-victory-2026",
+      "title": "AZ-09 House Election Margin of Victory"
+    },
+    {
+      "slug": "balance-of-power-2026-midterms",
+      "title": "Balance of Power: 2026 Midterms"
+    },
+    {
+      "slug": "blue-mega-tsunami-in-2026",
+      "title": "Blue mega-tsunami in 2026?"
+    },
+    {
+      "slug": "blue-tsunami-in-2026",
+      "title": "Blue tsunami in 2026?"
+    },
+    {
+      "slug": "blue-wave-in-2026",
+      "title": "Blue wave in 2026?"
+    },
+    {
+      "slug": "ca-03-house-election-winner",
+      "title": "CA-03 House Election Winner"
+    },
+    {
+      "slug": "ca-06-house-election-winner",
+      "title": "CA-06 House Election Winner"
+    },
+    {
+      "slug": "ca-08-house-election-winner",
+      "title": "CA-08 House Election Winner"
+    },
+    {
+      "slug": "ca-11-house-election-winner",
+      "title": "CA-11 House Election Winner"
+    },
+    {
+      "slug": "ca-15-house-election-winner",
+      "title": "CA-15 House Election Winner"
+    },
+    {
+      "slug": "ca-16-house-election-winner",
+      "title": "CA-16 House Election Winner"
+    },
+    {
+      "slug": "ca-18-house-election-winner",
+      "title": "CA-18 House Election Winner"
+    },
+    {
+      "slug": "ca-24-house-election-winner",
+      "title": "CA-24 House Election Winner"
+    },
+    {
+      "slug": "ca-28-house-election-winner",
+      "title": "CA-28 House Election Winner"
+    },
+    {
+      "slug": "ca-29-house-election-winner",
+      "title": "CA-29 House Election Winner"
+    },
+    {
+      "slug": "ca-30-house-election-winner",
+      "title": "CA-30 House Election Winner"
+    },
+    {
+      "slug": "ca-32-house-election-winner",
+      "title": "CA-32 House Election Winner"
+    },
+    {
+      "slug": "ca-34-house-election-winner-individual-20260710020736883",
+      "title": "CA-34 House Election Winner (Individual)"
+    },
+    {
+      "slug": "ca-38-house-election-winner",
+      "title": "CA-38 House Election Winner"
+    },
+    {
+      "slug": "ca-39-house-election-winner",
+      "title": "CA-39 House Election Winner"
+    },
+    {
+      "slug": "ca-40-house-election-winner-individual-20260710020901480",
+      "title": "CA-40 House Election Winner (Individual)"
+    },
+    {
+      "slug": "ca-42-house-election-winner",
+      "title": "CA-42 House Election Winner"
+    },
+    {
+      "slug": "ca-45-house-election-winner",
+      "title": "CA-45 House Election Winner"
+    },
+    {
+      "slug": "ca-46-house-election-winner",
+      "title": "CA-46 House Election Winner"
+    },
+    {
+      "slug": "ca-52-house-election-winner",
+      "title": "CA-52 House Election Winner"
+    },
+    {
+      "slug": "california-governor-election-2026",
+      "title": "California Governor Election Winner"
+    },
+    {
+      "slug": "california-governor-election-fresno-county-winner",
+      "title": "California Governor Election: Fresno County Winner"
+    },
+    {
+      "slug": "california-governor-election-turnout",
+      "title": "California Governor Election: Turnout"
+    },
+    {
+      "slug": "closer-senate-race-minnesota-or-mississippi",
+      "title": "Closer Senate Race: Minnesota or Mississippi?"
+    },
+    {
+      "slug": "closer-senate-race-nebraska-or-texas",
+      "title": "Closer Senate Race: Nebraska or Texas?"
+    },
+    {
+      "slug": "closer-senate-race-south-dakota-or-new-mexico",
+      "title": "Closer Senate Race: South Dakota or New Mexico?"
+    },
+    {
+      "slug": "co-03-house-election-winner",
+      "title": "CO-03 House Election Winner"
+    },
+    {
+      "slug": "co-04-house-election-winner",
+      "title": "CO-04 House Election Winner"
+    },
+    {
+      "slug": "co-05-house-election-winner",
+      "title": "CO-05 House Election Winner"
+    },
+    {
+      "slug": "co-05-house-margin-of-victory-2026",
+      "title": "CO-05 House Election Margin of Victory"
+    },
+    {
+      "slug": "co-06-house-margin-of-victory-2026",
+      "title": "CO-06 House Election Margin of Victory"
+    },
+    {
+      "slug": "co-08-house-election-winner",
+      "title": "CO-08 House Election Winner"
+    },
+    {
+      "slug": "co-08-house-margin-of-victory-2026",
+      "title": "CO-08 House Election Margin of Victory"
+    },
+    {
+      "slug": "colorado-governor-winner-2026",
+      "title": "Colorado Governor Election Winner"
+    },
+    {
+      "slug": "colorado-senate-election-winner",
+      "title": "Colorado Senate Election Winner"
+    },
+    {
+      "slug": "connecticut-governor-winner-2026",
+      "title": "Connecticut Governor Election Winner"
+    },
+    {
+      "slug": "ct-01-house-election-winner",
+      "title": "CT-01 House Election Winner"
+    },
+    {
+      "slug": "ct-04-house-election-winner",
+      "title": "CT-04 House Election Winner"
+    },
+    {
+      "slug": "delaware-senate-election-winner",
+      "title": "Delaware Senate Election Winner"
+    },
+    {
+      "slug": "dem-sweep-and-democrat-wins-2028-presidency",
+      "title": "Dem sweep & Democrat wins 2028 presidency?"
+    },
+    {
+      "slug": "dem-sweep-and-us-iran-ceasefire-through-2027",
+      "title": "Dem sweep & US-Iran ceasefire through 2027?"
+    },
+    {
+      "slug": "fall-elections-three-way-brazil-israel-us-senate-combo",
+      "title": "Fall Elections Combo: Brazil, Israel, US Senate"
+    },
+    {
+      "slug": "fl-02-house-election-winner",
+      "title": "FL-02 House Election Winner"
+    },
+    {
+      "slug": "fl-03-house-margin-of-victory-2026",
+      "title": "FL-03 House Election Margin of Victory"
+    },
+    {
+      "slug": "fl-04-house-election-winner",
+      "title": "FL-04 House Election Winner"
+    },
+    {
+      "slug": "fl-07-house-election-winner",
+      "title": "FL-07 House Election Winner"
+    },
+    {
+      "slug": "fl-08-house-margin-of-victory-2026",
+      "title": "FL-08 House Election Margin of Victory"
+    },
+    {
+      "slug": "fl-09-house-election-winner",
+      "title": "FL-09 House Election Winner"
+    },
+    {
+      "slug": "fl-11-house-election-winner",
+      "title": "FL-11 House Election Winner"
+    },
+    {
+      "slug": "fl-11-house-margin-of-victory-2026",
+      "title": "FL-11 House Election Margin of Victory"
+    },
+    {
+      "slug": "fl-12-house-election-winner",
+      "title": "FL-12 House Election Winner"
+    },
+    {
+      "slug": "fl-13-house-election-winner",
+      "title": "FL-13 House Election Winner"
+    },
+    {
+      "slug": "fl-14-house-election-winner",
+      "title": "FL-14 House Election Winner"
+    },
+    {
+      "slug": "fl-15-house-margin-of-victory-2026",
+      "title": "FL-15 House Election Margin of Victory"
+    },
+    {
+      "slug": "fl-18-house-margin-of-victory-2026",
+      "title": "FL-18 House Election Margin of Victory"
+    },
+    {
+      "slug": "fl-19-house-margin-of-victory-2026",
+      "title": "FL-19 House Election Margin of Victory"
+    },
+    {
+      "slug": "fl-21-house-election-winner",
+      "title": "FL-21 House Election Winner"
+    },
+    {
+      "slug": "fl-22-house-election-winner",
+      "title": "FL-22 House Election Winner"
+    },
+    {
+      "slug": "fl-24-house-election-winner",
+      "title": "FL-24 House Election Winner"
+    },
+    {
+      "slug": "fl-25-house-election-winner",
+      "title": "FL-25 House Election Winner"
+    },
+    {
+      "slug": "fl-26-house-election-winner",
+      "title": "FL-26 House Election Winner"
+    },
+    {
+      "slug": "fl-27-house-election-winner",
+      "title": "FL-27 House Election Winner"
+    },
+    {
+      "slug": "florida-attorney-general-election-winner-2026",
+      "title": "Florida Attorney General Election Winner"
+    },
+    {
+      "slug": "florida-governor-margin-of-victory-2026",
+      "title": "Florida Governor Election Margin of Victory"
+    },
+    {
+      "slug": "florida-governor-winner-2026",
+      "title": "Florida Governor Election Winner"
+    },
+    {
+      "slug": "florida-senate-election-winner",
+      "title": "Florida Senate Election Winner"
+    },
+    {
+      "slug": "florida-senate-margin-of-victory-2026",
+      "title": "Florida Senate Election Margin of Victory"
+    },
+    {
+      "slug": "ga-01-house-election-winner",
+      "title": "GA-01 House Election Winner"
+    },
+    {
+      "slug": "ga-07-house-margin-of-victory-2026",
+      "title": "GA-07 House Election Margin of Victory (First Round)"
+    },
+    {
+      "slug": "ga-08-house-margin-of-victory-2026",
+      "title": "GA-08 House Election Margin of Victory (First Round)"
+    },
+    {
+      "slug": "ga-11-house-election-winner",
+      "title": "GA-11 House Election Winner"
+    },
+    {
+      "slug": "ga-12-house-election-winner",
+      "title": "GA-12 House Election Winner"
+    },
+    {
+      "slug": "georgia-governor-winner-2026",
+      "title": "Georgia Governor Election Winner"
+    },
+    {
+      "slug": "georgia-lieutenant-governor-election-winner-2026",
+      "title": "Georgia Lieutenant Governor Election Winner"
+    },
+    {
+      "slug": "georgia-senate-election-first-round-margin-of-victory-20260804175717495",
+      "title": "Georgia Senate Election Margin of Victory (First Round)"
+    },
+    {
+      "slug": "georgia-senate-election-winner",
+      "title": "Georgia Senate Election Winner"
+    },
+    {
+      "slug": "guam-governor-election-winner-2026",
+      "title": "Guam Governor Election Winner"
+    },
+    {
+      "slug": "hi-01-house-election-winner",
+      "title": "HI-01 House Election Winner"
+    },
+    {
+      "slug": "hi-02-house-election-winner",
+      "title": "HI-02 House Election Winner"
+    },
+    {
+      "slug": "how-many-house-seats-will-the-democrats-win-in-alabama",
+      "title": "How many House seats will the Democrats win in Alabama?"
+    },
+    {
+      "slug": "how-many-house-seats-will-the-democrats-win-in-arizona",
+      "title": "How many House seats will the Democrats win in Arizona?"
+    },
+    {
+      "slug": "how-many-house-seats-will-the-democrats-win-in-california",
+      "title": "How many House seats will the Democrats win in California?"
+    },
+    {
+      "slug": "how-many-house-seats-will-the-democrats-win-in-colorado",
+      "title": "How many House seats will the Democrats win in Colorado?"
+    },
+    {
+      "slug": "how-many-house-seats-will-the-democrats-win-in-florida",
+      "title": "How many House seats will the Democrats win in Florida?"
+    },
+    {
+      "slug": "how-many-house-seats-will-the-democrats-win-in-iowa",
+      "title": "How many House seats will the Democrats win in Iowa?"
+    },
+    {
+      "slug": "how-many-house-seats-will-the-democrats-win-in-minnesota",
+      "title": "How many House seats will the Democrats win in Minnesota?"
+    },
+    {
+      "slug": "how-many-house-seats-will-the-democrats-win-in-north-carolina",
+      "title": "How many House seats will the Democrats win in North Carolina?"
+    },
+    {
+      "slug": "how-many-house-seats-will-the-democrats-win-in-ohio",
+      "title": "How many House seats will the Democrats win in Ohio?"
+    },
+    {
+      "slug": "how-many-house-seats-will-the-democrats-win-in-south-carolina",
+      "title": "How many House seats will the Democrats win in South Carolina?"
+    },
+    {
+      "slug": "how-many-republican-governors-after-the-2026-midterm-elections",
+      "title": "How many Republican Governors after the 2026 midterm elections?"
+    },
+    {
+      "slug": "how-many-senate-and-house-seats-will-republicans-have-after-the-midterms-20260625152833634",
+      "title": "How many Senate and House seats will Republicans have after the midterms?"
+    },
+    {
+      "slug": "ia-01-house-election-winner",
+      "title": "IA-01 House Election Winner"
+    },
+    {
+      "slug": "ia-02-house-election-winner",
+      "title": "IA-02 House Election Winner"
+    },
+    {
+      "slug": "ia-03-house-election-winner",
+      "title": "IA-03 House Election Winner"
+    },
+    {
+      "slug": "ia-03-house-margin-of-victory-2026",
+      "title": "IA-03 House Election Margin of Victory"
+    },
+    {
+      "slug": "ia-04-house-margin-of-victory-2026",
+      "title": "IA-04 House Election Margin of Victory"
+    },
+    {
+      "slug": "id-01-house-election-winner",
+      "title": "ID-01 House Election Winner"
+    },
+    {
+      "slug": "id-02-house-margin-of-victory-2026",
+      "title": "ID-02 House Election Margin of Victory"
+    },
+    {
+      "slug": "idaho-governor-winner-2026",
+      "title": "Idaho Governor Election Winner"
+    },
+    {
+      "slug": "idaho-senate-election-winner",
+      "title": "Idaho Senate Election Winner"
+    },
+    {
+      "slug": "il-01-house-election-winner",
+      "title": "IL-01 House Election Winner"
+    },
+    {
+      "slug": "il-02-house-election-winner",
+      "title": "IL-02 House Election Winner"
+    },
+    {
+      "slug": "il-03-house-election-winner",
+      "title": "IL-03 House Election Winner"
+    },
+    {
+      "slug": "il-04-house-election-winner",
+      "title": "IL-04 House Election Winner"
+    },
+    {
+      "slug": "il-05-house-margin-of-victory-2026",
+      "title": "IL-05 House Election Margin of Victory"
+    },
+    {
+      "slug": "il-06-house-election-winner",
+      "title": "IL-06 House Election Winner"
+    },
+    {
+      "slug": "il-09-house-margin-of-victory-2026",
+      "title": "IL-09 House Election Margin of Victory"
+    },
+    {
+      "slug": "il-10-house-election-winner",
+      "title": "IL-10 House Election Winner"
+    },
+    {
+      "slug": "il-11-house-election-winner",
+      "title": "IL-11 House Election Winner"
+    },
+    {
+      "slug": "il-14-house-margin-of-victory-2026",
+      "title": "IL-14 House Election Margin of Victory"
+    },
+    {
+      "slug": "il-15-house-election-winner",
+      "title": "IL-15 House Election Winner"
+    },
+    {
+      "slug": "illinois-governor-winner-2026",
+      "title": "Illinois Governor Election Winner"
+    },
+    {
+      "slug": "illinois-senate-election-winner",
+      "title": "Illinois Senate Election Winner"
+    },
+    {
+      "slug": "in-01-house-election-winner",
+      "title": "IN-01 House Election Winner"
+    },
+    {
+      "slug": "in-03-house-election-winner",
+      "title": "IN-03 House Election Winner"
+    },
+    {
+      "slug": "in-05-house-election-winner",
+      "title": "IN-05 House Election Winner"
+    },
+    {
+      "slug": "in-06-house-margin-of-victory-2026",
+      "title": "IN-06 House Election Margin of Victory"
+    },
+    {
+      "slug": "indiana-secretary-of-state-election-winner-2026",
+      "title": "Indiana Secretary of State Election Winner"
+    },
+    {
+      "slug": "iowa-governor-winner-2026",
+      "title": "Iowa Governor Election Winner"
+    },
+    {
+      "slug": "iowa-senate-election-winner",
+      "title": "Iowa Senate Election Winner"
+    },
+    {
+      "slug": "iowa-senate-margin-of-victory-2026",
+      "title": "Iowa Senate Election Margin of Victory"
+    },
+    {
+      "slug": "kansas-governor-margin-of-victory-2026",
+      "title": "Kansas Governor Election Margin of Victory"
+    },
+    {
+      "slug": "kansas-governor-winner-2026",
+      "title": "Kansas Governor Election Winner"
+    },
+    {
+      "slug": "kansas-senate-election-winner",
+      "title": "Kansas Senate Election Winner"
+    },
+    {
+      "slug": "kansas-senate-margin-of-victory-2026",
+      "title": "Kansas Senate Election Margin of Victory"
+    },
+    {
+      "slug": "kentucky-senate-election-winner",
+      "title": "Kentucky Senate Election Winner"
+    },
+    {
+      "slug": "ks-01-house-election-winner",
+      "title": "KS-01 House Election Winner"
+    },
+    {
+      "slug": "ks-02-house-election-winner",
+      "title": "KS-02 House Election Winner"
+    },
+    {
+      "slug": "ks-02-house-margin-of-victory-2026",
+      "title": "KS-02 House Election Margin of Victory"
+    },
+    {
+      "slug": "ks-03-house-election-winner",
+      "title": "KS-03 House Election Winner"
+    },
+    {
+      "slug": "ks-04-house-election-winner",
+      "title": "KS-04 House Election Winner"
+    },
+    {
+      "slug": "ky-04-house-election-winner",
+      "title": "KY-04 House Election Winner"
+    },
+    {
+      "slug": "ky-05-house-election-winner",
+      "title": "KY-05 House Election Winner"
+    },
+    {
+      "slug": "ky-06-house-election-winner",
+      "title": "KY-06 House Election Winner"
+    },
+    {
+      "slug": "la-03-house-election-winner",
+      "title": "LA-03 House Election Winner"
+    },
+    {
+      "slug": "la-06-house-election-winner",
+      "title": "LA-06 House Election Winner"
+    },
+    {
+      "slug": "louisiana-senate-election-winner",
+      "title": "Louisiana Senate Election Winner"
+    },
+    {
+      "slug": "ma-02-house-election-winner",
+      "title": "MA-02 House Election Winner"
+    },
+    {
+      "slug": "ma-06-house-election-winner",
+      "title": "MA-06 House Election Winner"
+    },
+    {
+      "slug": "maine-governor-winner-2026",
+      "title": "Maine Governor Election Winner"
+    },
+    {
+      "slug": "maine-senate-election-margin-of-victory-first-round-20260804181547915",
+      "title": "Maine Senate Election Margin of Victory (First Round)"
+    },
+    {
+      "slug": "maine-senate-election-winner",
+      "title": "Maine Senate Election Winner"
+    },
+    {
+      "slug": "maryland-governor-winner-2026",
+      "title": "Maryland Governor Election Winner"
+    },
+    {
+      "slug": "massachusetts-governor-winner-2026",
+      "title": "Massachusetts Governor Election Winner"
+    },
+    {
+      "slug": "massachusetts-senate-election-winner",
+      "title": "Massachusetts Senate Election Winner"
+    },
+    {
+      "slug": "md-01-house-election-winner",
+      "title": "MD-01 House Election Winner"
+    },
+    {
+      "slug": "md-03-house-margin-of-victory-2026",
+      "title": "MD-03 House Election Margin of Victory"
+    },
+    {
+      "slug": "md-05-house-margin-of-victory-2026",
+      "title": "MD-05 House Election Margin of Victory"
+    },
+    {
+      "slug": "me-02-house-election-winner-20260720160226434",
+      "title": "ME-02 House Election Winner"
+    },
+    {
+      "slug": "mi-01-house-election-winner",
+      "title": "MI-01 House Election Winner"
+    },
+    {
+      "slug": "mi-04-house-election-winner",
+      "title": "MI-04 House Election Winner"
+    },
+    {
+      "slug": "mi-06-house-election-winner",
+      "title": "MI-06 House Election Winner"
+    },
+    {
+      "slug": "mi-07-house-election-winner",
+      "title": "MI-07 House Election Winner"
+    },
+    {
+      "slug": "mi-08-house-election-winner",
+      "title": "MI-08 House Election Winner"
+    },
+    {
+      "slug": "mi-09-house-election-winner",
+      "title": "MI-09 House Election Winner"
+    },
+    {
+      "slug": "mi-09-house-margin-of-victory-2026",
+      "title": "MI-09 House Election Margin of Victory"
+    },
+    {
+      "slug": "mi-10-house-election-winner",
+      "title": "MI-10 House Election Winner"
+    },
+    {
+      "slug": "mi-11-house-election-winner",
+      "title": "MI-11 House Election Winner"
+    },
+    {
+      "slug": "michigan-governor-winner-2026",
+      "title": "Michigan Governor Election Winner"
+    },
+    {
+      "slug": "michigan-senate-election-macomb-county-winner",
+      "title": "Michigan Senate Election: Macomb County Winner"
+    },
+    {
+      "slug": "michigan-senate-election-winner",
+      "title": "Michigan Senate Election Winner"
+    },
+    {
+      "slug": "michigan-senate-margin-of-victory-2026",
+      "title": "Michigan Senate Election Margin of Victory"
+    },
+    {
+      "slug": "minnesota-attorney-general-election-winner-2026",
+      "title": "Minnesota Attorney General Election Winner"
+    },
+    {
+      "slug": "minnesota-governor-winner-2026",
+      "title": "Minnesota Governor Election Winner"
+    },
+    {
+      "slug": "minnesota-senate-election-winner",
+      "title": "Minnesota Senate Election Winner"
+    },
+    {
+      "slug": "minnesota-senate-margin-of-victory-2026",
+      "title": "Minnesota Senate Election Margin of Victory"
+    },
+    {
+      "slug": "mississippi-senate-election-margin-of-victory-first-round-20260804182229477",
+      "title": "Mississippi Senate Election Margin of Victory (First Round)"
+    },
+    {
+      "slug": "mississippi-senate-election-winner",
+      "title": "Mississippi Senate Election Winner"
+    },
+    {
+      "slug": "mn-01-house-election-winner",
+      "title": "MN-01 House Election Winner"
+    },
+    {
+      "slug": "mn-02-house-election-winner",
+      "title": "MN-02 House Election Winner"
+    },
+    {
+      "slug": "mn-03-house-margin-of-victory-2026",
+      "title": "MN-03 House Election Margin of Victory"
+    },
+    {
+      "slug": "mn-05-house-election-winner",
+      "title": "MN-05 House Election Winner"
+    },
+    {
+      "slug": "mn-05-house-margin-of-victory-2026",
+      "title": "MN-05 House Election Margin of Victory"
+    },
+    {
+      "slug": "mn-06-house-election-winner",
+      "title": "MN-06 House Election Winner"
+    },
+    {
+      "slug": "mn-07-house-margin-of-victory-2026",
+      "title": "MN-07 House Election Margin of Victory"
+    },
+    {
+      "slug": "mn-08-house-election-winner",
+      "title": "MN-08 House Election Winner"
+    },
+    {
+      "slug": "mo-02-house-election-winner",
+      "title": "MO-02 House Election Winner"
+    },
+    {
+      "slug": "mo-04-house-election-winner",
+      "title": "MO-04 House Election Winner"
+    },
+    {
+      "slug": "mo-05-house-election-winner",
+      "title": "MO-05 House Election Winner"
+    },
+    {
+      "slug": "mo-07-house-election-winner",
+      "title": "MO-07 House Election Winner"
+    },
+    {
+      "slug": "mo-07-house-margin-of-victory-2026",
+      "title": "MO-07 House Election Margin of Victory"
+    },
+    {
+      "slug": "mo-08-house-margin-of-victory-2026",
+      "title": "MO-08 House Election Margin of Victory"
+    },
+    {
+      "slug": "montana-senate-election-winner",
+      "title": "Montana Senate Election Winner"
+    },
+    {
+      "slug": "ms-01-house-election-winner",
+      "title": "MS-01 House Election Winner"
+    },
+    {
+      "slug": "mt-01-house-election-winner",
+      "title": "MT-01 House Election Winner"
+    },
+    {
+      "slug": "nc-01-house-election-winner",
+      "title": "NC-01 House Election Winner"
+    },
+    {
+      "slug": "nc-02-house-margin-of-victory-2026",
+      "title": "NC-02 House Election Margin of Victory"
+    },
+    {
+      "slug": "nc-03-house-election-winner",
+      "title": "NC-03 House Election Winner"
+    },
+    {
+      "slug": "nc-04-house-election-winner",
+      "title": "NC-04 House Election Winner"
+    },
+    {
+      "slug": "nc-04-house-margin-of-victory-2026",
+      "title": "NC-04 House Election Margin of Victory"
+    },
+    {
+      "slug": "nc-05-house-election-winner",
+      "title": "NC-05 House Election Winner"
+    },
+    {
+      "slug": "nc-06-house-election-winner",
+      "title": "NC-06 House Election Winner"
+    },
+    {
+      "slug": "nc-07-house-election-winner",
+      "title": "NC-07 House Election Winner"
+    },
+    {
+      "slug": "nc-08-house-election-winner",
+      "title": "NC-08 House Election Winner"
+    },
+    {
+      "slug": "nc-08-house-margin-of-victory-2026",
+      "title": "NC-08 House Election Margin of Victory"
+    },
+    {
+      "slug": "nc-09-house-election-winner",
+      "title": "NC-09 House Election Winner"
+    },
+    {
+      "slug": "nc-10-house-election-winner",
+      "title": "NC-10 House Election Winner"
+    },
+    {
+      "slug": "nc-11-house-election-winner",
+      "title": "NC-11 House Election Winner"
+    },
+    {
+      "slug": "nc-13-house-election-winner",
+      "title": "NC-13 House Election Winner"
+    },
+    {
+      "slug": "nc-14-house-election-winner",
+      "title": "NC-14 House Election Winner"
+    },
+    {
+      "slug": "nd-al-house-election-winner",
+      "title": "ND-AL House Election Winner"
+    },
+    {
+      "slug": "nd-al-house-margin-of-victory-2026",
+      "title": "ND-AL House Election Margin of Victory"
+    },
+    {
+      "slug": "ne-01-house-election-winner",
+      "title": "NE-01 House Election Winner"
+    },
+    {
+      "slug": "ne-03-house-election-winner",
+      "title": "NE-03 House Election Winner"
+    },
+    {
+      "slug": "ne-03-house-margin-of-victory-2026",
+      "title": "NE-03 House Election Margin of Victory"
+    },
+    {
+      "slug": "nebraska-governor-margin-of-victory-2026",
+      "title": "Nebraska Governor Election Margin of Victory"
+    },
+    {
+      "slug": "nebraska-governor-winner-2026",
+      "title": "Nebraska Governor Election Winner"
+    },
+    {
+      "slug": "nebraska-senate-election-winner",
+      "title": "Nebraska Senate Election Winner  "
+    },
+    {
+      "slug": "nevada-governor-winner-2026",
+      "title": "Nevada Governor Election Winner"
+    },
+    {
+      "slug": "new-hampshire-governor-winner-2026",
+      "title": "New Hampshire Governor Election Winner"
+    },
+    {
+      "slug": "new-hampshire-senate-election-winner",
+      "title": "New Hampshire Senate Election Winner"
+    },
+    {
+      "slug": "new-jersey-senate-election-winner",
+      "title": "New Jersey Senate Election Winner"
+    },
+    {
+      "slug": "new-mexico-governor-winner-2026",
+      "title": "New Mexico Governor Election Winner"
+    },
+    {
+      "slug": "new-mexico-senate-election-turnout",
+      "title": "New Mexico Senate Election: Turnout"
+    },
+    {
+      "slug": "new-mexico-senate-election-winner",
+      "title": "New Mexico Senate Election Winner"
+    },
+    {
+      "slug": "new-virginia-congressional-map-used-in-the-midterms",
+      "title": "New Virginia congressional map used in the midterms?"
+    },
+    {
+      "slug": "new-york-attorney-general-election-winner-2026",
+      "title": "New York Attorney General Election Winner"
+    },
+    {
+      "slug": "new-york-governor-winner-2026",
+      "title": "New York Governor Election Winner"
+    },
+    {
+      "slug": "next-senate-majority-leader-485",
+      "title": "Next Senate Majority Leader?"
+    },
+    {
+      "slug": "nh-01-house-margin-of-victory-2026",
+      "title": "NH-01 House Election Margin of Victory"
+    },
+    {
+      "slug": "nh-02-house-margin-of-victory-2026",
+      "title": "NH-02 House Election Margin of Victory"
+    },
+    {
+      "slug": "nj-02-house-election-winner",
+      "title": "NJ-02 House Election Winner"
+    },
+    {
+      "slug": "nj-04-house-election-winner",
+      "title": "NJ-04 House Election Winner"
+    },
+    {
+      "slug": "nj-06-house-margin-of-victory-2026",
+      "title": "NJ-06 House Election Margin of Victory"
+    },
+    {
+      "slug": "nj-07-house-election-winner",
+      "title": "NJ-07 House Election Winner"
+    },
+    {
+      "slug": "nj-08-house-election-winner",
+      "title": "NJ-08 House Election Winner"
+    },
+    {
+      "slug": "nj-09-house-margin-of-victory-2026",
+      "title": "NJ-09 House Election Margin of Victory"
+    },
+    {
+      "slug": "nj-12-house-margin-of-victory-2026",
+      "title": "NJ-12 House Election Margin of Victory"
+    },
+    {
+      "slug": "nm-02-house-election-winner",
+      "title": "NM-02 House Election Winner"
+    },
+    {
+      "slug": "nm-02-house-margin-of-victory-2026",
+      "title": "NM-02 House Election Margin of Victory"
+    },
+    {
+      "slug": "nm-03-house-margin-of-victory-2026",
+      "title": "NM-03 House Election Margin of Victory"
+    },
+    {
+      "slug": "north-carolina-senate-election-winner",
+      "title": "North Carolina Senate Election Winner"
+    },
+    {
+      "slug": "north-carolina-senate-margin-of-victory-2026",
+      "title": "North Carolina Senate Election Margin of Victory"
+    },
+    {
+      "slug": "nv-02-house-election-winner",
+      "title": "NV-02 House Election Winner"
+    },
+    {
+      "slug": "nv-03-house-election-winner",
+      "title": "NV-03 House Election Winner"
+    },
+    {
+      "slug": "nv-03-house-margin-of-victory-2026",
+      "title": "NV-03 House Election Margin of Victory"
+    },
+    {
+      "slug": "ny-01-house-election-winner",
+      "title": "NY-01 House Election Winner"
+    },
+    {
+      "slug": "ny-02-house-election-winner",
+      "title": "NY-02 House Election Winner"
+    },
+    {
+      "slug": "ny-03-house-election-winner",
+      "title": "NY-03 House Election Winner"
+    },
+    {
+      "slug": "ny-03-house-margin-of-victory-2026",
+      "title": "NY-03 House Election Margin of Victory"
+    },
+    {
+      "slug": "ny-04-house-election-winner",
+      "title": "NY-04 House Election Winner"
+    },
+    {
+      "slug": "ny-07-house-election-winner",
+      "title": "NY-07 House Election Winner"
+    },
+    {
+      "slug": "ny-07-house-margin-of-victory-2026",
+      "title": "NY-07 House Election Margin of Victory"
+    },
+    {
+      "slug": "ny-08-house-margin-of-victory-2026",
+      "title": "NY-08 House Election Margin of Victory"
+    },
+    {
+      "slug": "ny-09-house-margin-of-victory-2026",
+      "title": "NY-09 House Election Margin of Victory"
+    },
+    {
+      "slug": "ny-10-house-election-winner",
+      "title": "NY-10 House Election Winner"
+    },
+    {
+      "slug": "ny-12-house-margin-of-victory-2026",
+      "title": "NY-12 House Election Margin of Victory"
+    },
+    {
+      "slug": "ny-13-house-election-winner",
+      "title": "NY-13 House Election Winner"
+    },
+    {
+      "slug": "ny-14-house-margin-of-victory-2026",
+      "title": "NY-14 House Election Margin of Victory"
+    },
+    {
+      "slug": "ny-17-house-election-winner",
+      "title": "NY-17 House Election Winner"
+    },
+    {
+      "slug": "ny-21-house-election-winner",
+      "title": "NY-21 House Election Winner"
+    },
+    {
+      "slug": "ny-22-house-election-winner",
+      "title": "NY-22 House Election Winner"
+    },
+    {
+      "slug": "ny-23-house-election-winner",
+      "title": "NY-23 House Election Winner"
+    },
+    {
+      "slug": "ny-25-house-margin-of-victory-2026",
+      "title": "NY-25 House Election Margin of Victory"
+    },
+    {
+      "slug": "oh-01-house-election-winner",
+      "title": "OH-01 House Election Winner"
+    },
+    {
+      "slug": "oh-01-house-margin-of-victory-2026",
+      "title": "OH-01 House Election Margin of Victory"
+    },
+    {
+      "slug": "oh-03-house-margin-of-victory-2026",
+      "title": "OH-03 House Election Margin of Victory"
+    },
+    {
+      "slug": "oh-07-house-election-winner",
+      "title": "OH-07 House Election Winner"
+    },
+    {
+      "slug": "oh-09-house-election-winner",
+      "title": "OH-09 House Election Winner"
+    },
+    {
+      "slug": "oh-10-house-election-winner",
+      "title": "OH-10 House Election Winner"
+    },
+    {
+      "slug": "oh-11-house-margin-of-victory-2026",
+      "title": "OH-11 House Election Margin of Victory"
+    },
+    {
+      "slug": "oh-12-house-election-winner",
+      "title": "OH-12 House Election Winner"
+    },
+    {
+      "slug": "oh-13-house-margin-of-victory-2026",
+      "title": "OH-13 House Election Margin of Victory"
+    },
+    {
+      "slug": "oh-14-house-margin-of-victory-2026",
+      "title": "OH-14 House Election Margin of Victory"
+    },
+    {
+      "slug": "ohio-governor-winner-2026",
+      "title": "Ohio Governor Election Winner"
+    },
+    {
+      "slug": "ohio-secretary-of-state-election-winner-2026",
+      "title": "Ohio Secretary of State Election Winner"
+    },
+    {
+      "slug": "ohio-senate-election-mahoning-county-winner",
+      "title": "Ohio Senate Election: Mahoning County Winner"
+    },
+    {
+      "slug": "ohio-senate-election-winner",
+      "title": "Ohio Senate Election Winner"
+    },
+    {
+      "slug": "ohio-senate-margin-of-victory-2026",
+      "title": "Ohio Senate Election Margin of Victory"
+    },
+    {
+      "slug": "ok-03-house-election-winner",
+      "title": "OK-03 House Election Winner"
+    },
+    {
+      "slug": "ok-04-house-margin-of-victory-2026",
+      "title": "OK-04 House Election Margin of Victory"
+    },
+    {
+      "slug": "ok-05-house-election-winner",
+      "title": "OK-05 House Election Winner"
+    },
+    {
+      "slug": "oklahoma-governor-winner-2026",
+      "title": "Oklahoma Governor Election Winner"
+    },
+    {
+      "slug": "oklahoma-senate-election-winner",
+      "title": "Oklahoma Senate Election Winner"
+    },
+    {
+      "slug": "or-02-house-election-winner",
+      "title": "OR-02 House Election Winner"
+    },
+    {
+      "slug": "or-02-house-margin-of-victory-2026",
+      "title": "OR-02 House Election Margin of Victory"
+    },
+    {
+      "slug": "or-03-house-election-winner",
+      "title": "OR-03 House Election Winner"
+    },
+    {
+      "slug": "or-03-house-margin-of-victory-2026",
+      "title": "OR-03 House Election Margin of Victory"
+    },
+    {
+      "slug": "oregon-governor-winner-2026",
+      "title": "Oregon Governor Election Winner"
+    },
+    {
+      "slug": "oregon-senate-margin-of-victory-2026",
+      "title": "Oregon Senate Election Margin of Victory"
+    },
+    {
+      "slug": "pa-01-house-election-winner",
+      "title": "PA-01 House Election Winner"
+    },
+    {
+      "slug": "pa-07-house-margin-of-victory-2026",
+      "title": "PA-07 House Election Margin of Victory"
+    },
+    {
+      "slug": "pa-08-house-election-winner",
+      "title": "PA-08 House Election Winner"
+    },
+    {
+      "slug": "pa-10-house-election-winner",
+      "title": "PA-10 House Election Winner"
+    },
+    {
+      "slug": "pa-11-house-election-winner",
+      "title": "PA-11 House Election Winner"
+    },
+    {
+      "slug": "pa-11-house-margin-of-victory-2026",
+      "title": "PA-11 House Election Margin of Victory"
+    },
+    {
+      "slug": "pa-16-house-margin-of-victory-2026",
+      "title": "PA-16 House Election Margin of Victory"
+    },
+    {
+      "slug": "pa-17-house-margin-of-victory-2026",
+      "title": "PA-17 House Election Margin of Victory"
+    },
+    {
+      "slug": "pennsylvania-governor-margin-of-victory-2026",
+      "title": "Pennsylvania Governor Election Margin of Victory"
+    },
+    {
+      "slug": "pennsylvania-governor-winner-2026",
+      "title": "Pennsylvania Governor Election Winner"
+    },
+    {
+      "slug": "republican-house-seats-after-the-2026-midterm-elections",
+      "title": "Republican House seats after the 2026 midterm elections?"
+    },
+    {
+      "slug": "republican-senate-seats-after-the-2026-midterm-elections-927",
+      "title": "Republican Senate seats after the 2026 midterm elections?"
+    },
+    {
+      "slug": "republican-senate-seats-after-the-midterms-low-brackets",
+      "title": "Republican Senate seats after the midterms (Lower Brackets)"
+    },
+    {
+      "slug": "republican-trifecta-with-supermajority-in-the-senate",
+      "title": "Republicans win Trifecta with Senate Supermajority in midterms?"
+    },
+    {
+      "slug": "republicans-win-the-senate-pending-hormuz-agreement",
+      "title": "Republicans win the Senate pending Hormuz Agreement?"
+    },
+    {
+      "slug": "republicans-win-the-senate-pending-oil-above-or-below-80",
+      "title": "Republicans win the Senate pending oil above or below $80?"
+    },
+    {
+      "slug": "rhode-island-governor-margin-of-victory-2026",
+      "title": "Rhode Island Governor Election Margin of Victory"
+    },
+    {
+      "slug": "rhode-island-governor-winner-2026",
+      "title": "Rhode Island Governor Election Winner"
+    },
+    {
+      "slug": "sc-01-house-election-winner",
+      "title": "SC-01 House Election Winner"
+    },
+    {
+      "slug": "sc-02-house-election-winner",
+      "title": "SC-02 House Election Winner"
+    },
+    {
+      "slug": "sc-05-house-election-winner",
+      "title": "SC-05 House Election Winner"
+    },
+    {
+      "slug": "sc-05-house-margin-of-victory-2026",
+      "title": "SC-05 House Election Margin of Victory"
+    },
+    {
+      "slug": "sc-07-house-election-winner",
+      "title": "SC-07 House Election Winner"
+    },
+    {
+      "slug": "sd-al-house-election-winner",
+      "title": "SD-AL House Election Winner"
+    },
+    {
+      "slug": "south-carolina-governor-winner-2026",
+      "title": "South Carolina Governor Election Winner"
+    },
+    {
+      "slug": "south-carolina-senate-election-winner",
+      "title": "South Carolina Senate Election Winner"
+    },
+    {
+      "slug": "south-carolina-senate-margin-of-victory-2026",
+      "title": "South Carolina Senate Election Margin of Victory"
+    },
+    {
+      "slug": "south-dakota-senate-election-winner",
+      "title": "South Dakota Senate Election Winner"
+    },
+    {
+      "slug": "south-dakota-senate-margin-of-victory-2026",
+      "title": "South Dakota Senate Election Margin of Victory"
+    },
+    {
+      "slug": "tennessee-governor-winner-2026",
+      "title": "Tennessee Governor Election Winner"
+    },
+    {
+      "slug": "tennessee-senate-election-winner",
+      "title": "Tennessee Senate Election Winner"
+    },
+    {
+      "slug": "texas-governor-margin-of-victory-2026",
+      "title": "Texas Governor Election Margin of Victory"
+    },
+    {
+      "slug": "texas-governor-winner-2026",
+      "title": "Texas Governor Election Winner"
+    },
+    {
+      "slug": "texas-lieutenant-governor-election-winner-2026",
+      "title": "Texas Lieutenant Governor Election Winner"
+    },
+    {
+      "slug": "texas-railroad-commissioner-election-winner-2026",
+      "title": "Texas Railroad Commissioner Election Winner"
+    },
+    {
+      "slug": "texas-senate-election-denton-county-winner",
+      "title": "Texas Senate Election: Denton County Winner"
+    },
+    {
+      "slug": "texas-senate-election-tarrant-county-winner",
+      "title": "Texas Senate Election: Tarrant County Winner"
+    },
+    {
+      "slug": "texas-senate-election-turnout",
+      "title": "Texas Senate Election: Turnout"
+    },
+    {
+      "slug": "texas-senate-election-winner",
+      "title": "Texas Senate Election Winner"
+    },
+    {
+      "slug": "texas-senate-margin-of-victory-2026",
+      "title": "Texas Senate Election Margin of Victory"
+    },
+    {
+      "slug": "tn-01-house-election-winner",
+      "title": "TN-01 House Election Winner"
+    },
+    {
+      "slug": "tn-03-house-margin-of-victory-2026",
+      "title": "TN-03 House Election Margin of Victory"
+    },
+    {
+      "slug": "tn-04-house-election-winner",
+      "title": "TN-04 House Election Winner"
+    },
+    {
+      "slug": "tn-05-house-election-winner",
+      "title": "TN-05 House Election Winner"
+    },
+    {
+      "slug": "tn-09-house-election-winner",
+      "title": "TN-09 House Election Winner"
+    },
+    {
+      "slug": "tx-02-house-margin-of-victory-2026",
+      "title": "TX-02 House Election Margin of Victory"
+    },
+    {
+      "slug": "tx-03-house-margin-of-victory-2026",
+      "title": "TX-03 House Election Margin of Victory"
+    },
+    {
+      "slug": "tx-04-house-margin-of-victory-2026",
+      "title": "TX-04 House Election Margin of Victory"
+    },
+    {
+      "slug": "tx-05-house-margin-of-victory-2026",
+      "title": "TX-05 House Election Margin of Victory"
+    },
+    {
+      "slug": "tx-06-house-election-winner",
+      "title": "TX-06 House Election Winner"
+    },
+    {
+      "slug": "tx-07-house-margin-of-victory-2026",
+      "title": "TX-07 House Election Margin of Victory"
+    },
+    {
+      "slug": "tx-09-house-election-winner",
+      "title": "TX-09 House Election Winner"
+    },
+    {
+      "slug": "tx-11-house-margin-of-victory-2026",
+      "title": "TX-11 House Election Margin of Victory"
+    },
+    {
+      "slug": "tx-12-house-election-winner",
+      "title": "TX-12 House Election Winner"
+    },
+    {
+      "slug": "tx-12-house-margin-of-victory-2026",
+      "title": "TX-12 House Election Margin of Victory"
+    },
+    {
+      "slug": "tx-13-house-margin-of-victory-2026",
+      "title": "TX-13 House Election Margin of Victory"
+    },
+    {
+      "slug": "tx-15-house-election-winner",
+      "title": "TX-15 House Election Winner"
+    },
+    {
+      "slug": "tx-15-house-margin-of-victory-2026",
+      "title": "TX-15 House Election Margin of Victory"
+    },
+    {
+      "slug": "tx-18-house-election-winner",
+      "title": "TX-18 House Election Winner"
+    },
+    {
+      "slug": "tx-18-house-margin-of-victory-2026",
+      "title": "TX-18 House Election Margin of Victory"
+    },
+    {
+      "slug": "tx-19-house-margin-of-victory-2026",
+      "title": "TX-19 House Election Margin of Victory"
+    },
+    {
+      "slug": "tx-20-house-margin-of-victory-2026",
+      "title": "TX-20 House Election Margin of Victory"
+    },
+    {
+      "slug": "tx-23-house-election-winner",
+      "title": "TX-23 House Election Winner"
+    },
+    {
+      "slug": "tx-24-house-election-winner",
+      "title": "TX-24 House Election Winner"
+    },
+    {
+      "slug": "tx-25-house-election-winner",
+      "title": "TX-25 House Election Winner"
+    },
+    {
+      "slug": "tx-25-house-margin-of-victory-2026",
+      "title": "TX-25 House Election Margin of Victory"
+    },
+    {
+      "slug": "tx-26-house-election-winner",
+      "title": "TX-26 House Election Winner"
+    },
+    {
+      "slug": "tx-28-house-election-winner",
+      "title": "TX-28 House Election Winner"
+    },
+    {
+      "slug": "tx-32-house-election-winner",
+      "title": "TX-32 House Election Winner"
+    },
+    {
+      "slug": "tx-34-house-election-winner",
+      "title": "TX-34 House Election Winner"
+    },
+    {
+      "slug": "tx-35-house-election-winner",
+      "title": "TX-35 House Election Winner"
+    },
+    {
+      "slug": "ut-01-house-margin-of-victory-2026",
+      "title": "UT-01 House Election Margin of Victory"
+    },
+    {
+      "slug": "ut-03-house-margin-of-victory-2026",
+      "title": "UT-03 House Election Margin of Victory"
+    },
+    {
+      "slug": "ut-04-house-margin-of-victory-2026",
+      "title": "UT-04 House Election Margin of Victory"
+    },
+    {
+      "slug": "va-01-house-election-winner",
+      "title": "VA-01 House Election Winner"
+    },
+    {
+      "slug": "va-01-house-margin-of-victory-2026",
+      "title": "VA-01 House Election Margin of Victory"
+    },
+    {
+      "slug": "va-02-house-election-winner",
+      "title": "VA-02 House Election Winner"
+    },
+    {
+      "slug": "va-03-house-election-winner",
+      "title": "VA-03 House Election Winner"
+    },
+    {
+      "slug": "va-05-house-election-winner",
+      "title": "VA-05 House Election Winner"
+    },
+    {
+      "slug": "va-06-house-election-winner",
+      "title": "VA-06 House Election Winner"
+    },
+    {
+      "slug": "va-08-house-election-winner",
+      "title": "VA-08 House Election Winner"
+    },
+    {
+      "slug": "vermont-governor-election-turnout",
+      "title": "Vermont Governor Election: Turnout"
+    },
+    {
+      "slug": "vermont-governor-winner-2026",
+      "title": "Vermont Governor Election Winner"
+    },
+    {
+      "slug": "virginia-senate-election-turnout",
+      "title": "Virginia Senate Election: Turnout"
+    },
+    {
+      "slug": "wa-01-house-election-winner",
+      "title": "WA-01 House Election Winner"
+    },
+    {
+      "slug": "wa-02-house-election-winner",
+      "title": "WA-02 House Election Winner"
+    },
+    {
+      "slug": "wa-03-house-election-winner",
+      "title": "WA-03 House Election Winner"
+    },
+    {
+      "slug": "wa-05-house-election-winner",
+      "title": "WA-05 House Election Winner"
+    },
+    {
+      "slug": "west-virginia-senate-election-turnout",
+      "title": "West Virginia Senate Election: Turnout"
+    },
+    {
+      "slug": "west-virginia-senate-election-winner",
+      "title": "West Virginia Senate Election Winner"
+    },
+    {
+      "slug": "west-virginia-senate-margin-of-victory-2026",
+      "title": "West Virginia Senate Election Margin of Victory"
+    },
+    {
+      "slug": "which-party-will-hold-more-governorships-after-the-midterms",
+      "title": "Which party will hold more governorships after the midterms?"
+    },
+    {
+      "slug": "which-party-will-win-the-arizona-state-senate-in-2026",
+      "title": "Which party will win the Arizona State Senate in 2026?"
+    },
+    {
+      "slug": "which-party-will-win-the-house-in-2026",
+      "title": "Which party will win the House in 2026?"
+    },
+    {
+      "slug": "which-party-will-win-the-house-race-for-the-ca-22-seat",
+      "title": "CA-22 House Election Winner"
+    },
+    {
+      "slug": "which-party-will-win-the-maine-state-senate-in-2026",
+      "title": "Which party will win the Maine State Senate in 2026?"
+    },
+    {
+      "slug": "which-party-will-win-the-minnesota-state-senate-in-2026",
+      "title": "Which party will win the Minnesota State Senate in 2026?"
+    },
+    {
+      "slug": "which-party-will-win-the-senate-in-2026",
+      "title": "Which party will win the Senate in 2026?"
+    },
+    {
+      "slug": "which-party-will-win-white-voters-in-the-midterms",
+      "title": "Which party will win white voters in the midterms?"
+    },
+    {
+      "slug": "which-senate-races-will-be-within-5-20260727153827321",
+      "title": "Which Senate races will be within 5%?"
+    },
+    {
+      "slug": "which-states-will-use-new-congressional-maps-in-the-midterms",
+      "title": "Which states will use new congressional maps in the midterms?"
+    },
+    {
+      "slug": "which-tossup-senate-states-will-republicans-win-ak-ia-ks-me-mi-oh-tx",
+      "title": "Which Senate Swing States will Republicans win? (Build Your Map)"
+    },
+    {
+      "slug": "who-wins-the-senate-pending-hormuz-agreement-and-oil-below-80",
+      "title": "Who wins the Senate pending Hormuz Agreement and oil below $80 before the midterms?"
+    },
+    {
+      "slug": "who-wins-the-senate-pending-hormuz-agreement-by-oct-23-and-oil-below-80",
+      "title": "Who wins the Senate pending Hormuz Agreement by Oct 23 and oil below $80 before the midterms?"
+    },
+    {
+      "slug": "who-wins-the-senate-pending-oil-above-or-below-80-before-the-midterms",
+      "title": "Who wins the Senate pending oil above or below $80 before the midterms?"
+    },
+    {
+      "slug": "who-wins-the-senate-pending-oil-below-85-before-the-midterms",
+      "title": "Who wins the Senate pending oil below $85 before the midterms?"
+    },
+    {
+      "slug": "wi-01-house-margin-of-victory-2026",
+      "title": "WI-01 House Election Margin of Victory"
+    },
+    {
+      "slug": "wi-03-house-election-winner",
+      "title": "WI-03 House Election Winner"
+    },
+    {
+      "slug": "wi-04-house-margin-of-victory-2026",
+      "title": "WI-04 House Election Margin of Victory"
+    },
+    {
+      "slug": "wi-05-house-election-winner",
+      "title": "WI-05 House Election Winner"
+    },
+    {
+      "slug": "wi-08-house-election-winner",
+      "title": "WI-08 House Election Winner"
+    },
+    {
+      "slug": "will-democrats-win-all-core-four-senate-races",
+      "title": "Will Democrats win all \"core four\" senate races?"
+    },
+    {
+      "slug": "will-republicans-lose-any-safe-republican-senate-race",
+      "title": "Will Republicans lose any \"Safe Republican\" Senate race?"
+    },
+    {
+      "slug": "will-vivek-ramaswamy-pull-the-amy-acton-mother-ad",
+      "title": "Will Vivek Ramaswamy pull the Amy Acton mother ad?"
+    },
+    {
+      "slug": "wisconsin-governor-margin-of-victory-2026",
+      "title": "Wisconsin Governor Election Margin of Victory"
+    },
+    {
+      "slug": "wisconsin-governor-winner-2026",
+      "title": "Wisconsin Governor Election Winner"
+    },
+    {
+      "slug": "wv-02-house-election-winner",
+      "title": "WV-02 House Election Winner"
+    },
+    {
+      "slug": "wyoming-governor-margin-of-victory-2026",
+      "title": "Wyoming Governor Election Margin of Victory"
+    }
+  ]
+}

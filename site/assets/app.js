@@ -94,6 +94,10 @@ function isEventStackCollapsed(key) {
 // lower, an event is kept only if ANY of its outcomes' current odds are at or
 // below the bound — and both YES and NO sides of every kept event stay visible.
 let oddsFilterMax = 1.0;
+// Midterms filter on the Portfolio table: when on, only positions whose event
+// is one of the 2026 midterm events in site-config (config/midterms.json).
+const MIDTERM_EVENTS = new Set(window.SITE_CONFIG?.midtermEvents || []);
+let midtermsOnly = false;
 
 // Recent Changes "Aggregate" toggle: when true, the changes-table is replaced
 // with a portfolio-style aggregate of just the positions that match the active
@@ -272,6 +276,11 @@ function filterByOddsRange(positions, maxOverride) {
   }
   // Positions without a conditionId can't be grouped into an event — keep them.
   return positions.filter(p => !p.conditionId || passing.has(p.conditionId));
+}
+
+function filterMidterms(positions) {
+  if (!midtermsOnly) return positions || [];
+  return (positions || []).filter(p => MIDTERM_EVENTS.has(p.eventSlug));
 }
 
 function formatExposureWithShares(exposure, shares) {
@@ -1201,7 +1210,7 @@ function renderPortfolioTable() {
     updateStackEventsButton();
     return;
   }
-  const positions = filterByOddsRange(filterBalancedPositions(aggregatedPortfolio.positions));
+  const positions = filterMidterms(filterByOddsRange(filterBalancedPositions(aggregatedPortfolio.positions)));
   renderPositionsAsPortfolioStyle(
     positions,
     thead,
@@ -1589,6 +1598,18 @@ function initBalancedFilterToggle() {
   updateBalancedFilterButton();
   document.getElementById('balanced-filter-btn')?.addEventListener('click', () => {
     hideBalancedPairs = !hideBalancedPairs;
+    renderPortfolioTable();
+  });
+}
+
+function initMidtermsFilter() {
+  const btn = document.getElementById('midterms-filter-btn');
+  if (!btn || !MIDTERM_EVENTS.size) return;
+  btn.hidden = false;
+  btn.addEventListener('click', () => {
+    midtermsOnly = !midtermsOnly;
+    btn.classList.toggle('active', midtermsOnly);
+    btn.setAttribute('aria-pressed', midtermsOnly ? 'true' : 'false');
     renderPortfolioTable();
   });
 }
@@ -2765,6 +2786,7 @@ function init() {
   initBalancedFilterToggle();
   initStackEventsToggle();
   initOddsFilter();
+  initMidtermsFilter();
   initRefresh();
   initUpdateTrigger();
   initChecker();
