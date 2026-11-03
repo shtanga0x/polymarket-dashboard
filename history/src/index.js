@@ -346,12 +346,13 @@ async function walletPnl(addr) {
 }
 
 async function fetchRanking(env, cid, nowS, bust) {
-  const tokens = await getJSON(`${DATA_API}/holders?market=${cid}&limit=${HOLDERS_N}${bust ? `&_=${nowS}` : ''}`);
+  // Data API v2 (v1 retired 2026-11-02): payload under `data`, snake_case rows.
+  const tokens = (await getJSON(`${DATA_API}/v2/holders?condition=${cid}&limit=${HOLDERS_N}${bust ? `&_=${nowS}` : ''}`))?.data || [];
   const outcomes = tokens.map((t) => {
     const holders = [...(t.holders || [])].sort((a, b) => b.amount - a.amount).slice(0, HOLDERS_N);
     return {
-      oi: holders[0]?.outcomeIndex ?? null,
-      holders: holders.map((h) => ({ addr: h.proxyWallet.toLowerCase(), name: h.name || h.pseudonym || '', shares: h.amount })),
+      oi: holders[0]?.outcome_index ?? null,
+      holders: holders.map((h) => ({ addr: h.proxy_wallet.toLowerCase(), name: h.name || h.pseudonym || '', shares: h.amount })),
     };
   }).filter((o) => o.oi !== null).sort((a, b) => a.oi - b.oi);
   await env.DB.prepare('INSERT OR REPLACE INTO holders_pnl_cache (cid, ts, body) VALUES (?, ?, ?)')
