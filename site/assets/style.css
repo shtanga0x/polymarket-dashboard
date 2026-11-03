@@ -485,10 +485,40 @@ main {
   transform: rotate(-90deg);
 }
 
-.midterms-filter-btn {
+/* Midterms filter: Polymarket's /midterms tab colours — party blue → red
+   (--color-pk-brand-500 / red-500 on dark, the -700 shades on light).
+   Off = gradient text, on = gradient fill. */
+:root {
+  --midterms-democrat: #2e5cff;
+  --midterms-republican: #df0c10;
+}
+:root[data-theme="light"] {
+  --midterms-democrat: #0f1ac6;
+  --midterms-republican: #930000;
+}
+.filter-btn.midterms-filter-btn {
   height: 34px;
   padding: 0 0.75rem;
   font-size: 0.85rem;
+  font-weight: 600;
+  background:
+    linear-gradient(to right, var(--midterms-democrat), var(--midterms-republican)),
+    linear-gradient(var(--bg-tertiary), var(--bg-tertiary));
+  -webkit-background-clip: text, padding-box;
+  background-clip: text, padding-box;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+.filter-btn.midterms-filter-btn:hover {
+  border-color: var(--midterms-democrat);
+}
+.filter-btn.midterms-filter-btn.active {
+  background: linear-gradient(to right, var(--midterms-democrat), var(--midterms-republican));
+  -webkit-background-clip: padding-box;
+  background-clip: padding-box;
+  border-color: transparent;
+  color: #fff;
+  -webkit-text-fill-color: #fff;
 }
 
 .odds-filter {
