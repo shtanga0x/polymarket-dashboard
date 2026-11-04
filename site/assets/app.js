@@ -1614,15 +1614,51 @@ function initMidtermsFilter() {
   });
 }
 
-function initOddsFilter() {
-  const sel = document.getElementById('odds-filter');
+/**
+ * Wire an odds-range <select> (fixed 0–Xc brackets + "Custom…") and its custom
+ * input. A custom bound is cents with at most one decimal, 0–99.9 (prices
+ * never reach 100c); anything else is flagged and not applied. `apply(max)`
+ * receives the bound as a price fraction.
+ */
+function bindOddsFilter(sel, input, initial, apply) {
   if (!sel) return;
-  sel.value = oddsFilterMax.toFixed(2);
+  sel.value = initial.toFixed(2);
+  const customOpt = sel.querySelector('option[value="custom"]');
+  const setCustomLabel = cents => {
+    if (customOpt) customOpt.textContent = cents == null ? 'Custom…' : `0–${cents}c ✎`;
+  };
+  const applyCustom = () => {
+    const raw = input.value.trim().replace(',', '.');
+    const cents = /^\d{1,2}(\.\d)?$/.test(raw) ? parseFloat(raw) : NaN;
+    const ok = Number.isFinite(cents) && cents <= 99.9;
+    input.classList.toggle('invalid', raw !== '' && !ok);
+    if (!ok) return;
+    setCustomLabel(cents);
+    apply(cents / 100);
+  };
   sel.addEventListener('change', () => {
+    const custom = sel.value === 'custom';
+    if (input) input.hidden = !custom;
+    if (custom) {
+      input.focus();
+      input.select();
+      if (input.value) applyCustom();
+      return;
+    }
+    setCustomLabel(null);
     const v = parseFloat(sel.value);
-    oddsFilterMax = Number.isFinite(v) ? v : 1.0;
-    renderPortfolioTable();
+    apply(Number.isFinite(v) ? v : 1.0);
   });
+  input?.addEventListener('input', applyCustom);
+}
+
+function initOddsFilter() {
+  bindOddsFilter(
+    document.getElementById('odds-filter'),
+    document.getElementById('odds-filter-custom'),
+    oddsFilterMax,
+    v => { oddsFilterMax = v; renderPortfolioTable(); }
+  );
 }
 
 /**
@@ -3490,15 +3526,12 @@ function updateCheckerStackButton() {
 }
 
 function initCheckerControls() {
-  const sel = document.getElementById('checker-odds-filter');
-  if (sel) {
-    sel.value = checkerOddsFilterMax.toFixed(2);
-    sel.addEventListener('change', () => {
-      const v = parseFloat(sel.value);
-      checkerOddsFilterMax = Number.isFinite(v) ? v : 1.0;
-      renderCheckerTable();
-    });
-  }
+  bindOddsFilter(
+    document.getElementById('checker-odds-filter'),
+    document.getElementById('checker-odds-filter-custom'),
+    checkerOddsFilterMax,
+    v => { checkerOddsFilterMax = v; renderCheckerTable(); }
+  );
   updateCheckerBalancedButton();
   document.getElementById('checker-balanced-filter-btn')?.addEventListener('click', () => {
     checkerHideBalanced = !checkerHideBalanced;

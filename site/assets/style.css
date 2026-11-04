@@ -533,6 +533,25 @@ main {
   transition: color 0.15s ease, border-color 0.15s ease;
 }
 
+.odds-custom {
+  width: 4.2rem;
+  height: 34px;
+  margin-left: 6px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0 0.5rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+.odds-custom:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+}
+.odds-custom.invalid,
+.odds-custom.invalid:focus {
+  border-color: var(--accent-red, #ef4444);
+}
 .odds-filter:hover {
   border-color: var(--accent-blue);
 }

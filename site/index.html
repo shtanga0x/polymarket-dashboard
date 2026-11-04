@@ -71,7 +71,7 @@
       <div class="section-header">
         <h2>Aggregated Portfolio</h2>
         <div class="portfolio-actions">
-          <span class="filter-tooltip" data-tooltip="Show only events where an outcome's current odds fall in the selected range (0&ndash;Xc). Both YES and NO sides stay visible for every matching event.">
+          <span class="filter-tooltip" data-tooltip="Show only events where an outcome's current odds fall in the selected range (0&ndash;Xc), or pick Custom for any bound up to 99.9c. Both YES and NO sides stay visible for every matching event.">
             <select id="odds-filter" class="odds-filter" aria-label="Filter events by odds range">
               <option value="0.10">0&ndash;10c</option>
               <option value="0.20">0&ndash;20c</option>
@@ -83,7 +83,9 @@
               <option value="0.80">0&ndash;80c</option>
               <option value="0.90">0&ndash;90c</option>
               <option value="1.00" selected>0&ndash;100c</option>
+              <option value="custom">Custom&hellip;</option>
             </select>
+            <input id="odds-filter-custom" class="odds-custom" type="text" inputmode="decimal" maxlength="5" placeholder="99.8" aria-label="Custom upper odds bound in cents (0–99.9)" title="0–99.9c, one decimal" hidden>
           </span>
           <span class="filter-tooltip" data-tooltip="Hide near-balanced YES/NO positions (<10% share gap).">
             <button id="balanced-filter-btn" class="icon-toggle-btn" type="button" aria-pressed="false" aria-label="Hide near-balanced positions"></button>
@@ -259,7 +261,7 @@
       <div class="section-header">
         <h2>Portfolio Checker</h2>
         <div class="portfolio-actions">
-          <span class="filter-tooltip" data-tooltip="Show only events where an outcome's current odds fall in the selected range (0&ndash;Xc). Both YES and NO sides stay visible for every matching event.">
+          <span class="filter-tooltip" data-tooltip="Show only events where an outcome's current odds fall in the selected range (0&ndash;Xc), or pick Custom for any bound up to 99.9c. Both YES and NO sides stay visible for every matching event.">
             <select id="checker-odds-filter" class="odds-filter" aria-label="Filter events by odds range">
               <option value="0.10">0&ndash;10c</option>
               <option value="0.20">0&ndash;20c</option>
@@ -271,7 +273,9 @@
               <option value="0.80">0&ndash;80c</option>
               <option value="0.90">0&ndash;90c</option>
               <option value="1.00" selected>0&ndash;100c</option>
+              <option value="custom">Custom&hellip;</option>
             </select>
+            <input id="checker-odds-filter-custom" class="odds-custom" type="text" inputmode="decimal" maxlength="5" placeholder="99.8" aria-label="Custom upper odds bound in cents (0–99.9)" title="0–99.9c, one decimal" hidden>
           </span>
           <span class="filter-tooltip" data-tooltip="Hide near-balanced YES/NO positions (<10% share gap).">
             <button id="checker-balanced-filter-btn" class="icon-toggle-btn" type="button" aria-pressed="false" aria-label="Hide near-balanced positions"></button>
