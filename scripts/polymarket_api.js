@@ -49,6 +49,10 @@ export class HttpError extends Error {
 // 'never'. A 3-round A/B on GitHub runners (2026-10-05) had direct runs 1.2-2.5×
 // faster with zero failures once /positions was paced, while whole-run proxy
 // outages had been stalling runs ~5 min.
+// data-api answers 429 to undici's default `User-Agent: node` regardless of
+// IP or rate (seen 2026-11-10: every request 429, curl/browser UAs 200).
+const USER_AGENT = 'Mozilla/5.0 (compatible; polymarket-dashboard/1.0)';
+
 const PROXY_MODE = (process.env.PROXY_MODE || 'fallback').toLowerCase();
 
 const RATE_LIMITS = [
@@ -95,7 +99,7 @@ async function fetchWithRetry(url, options = {}, config = {}) {
     // retries through the next proxy.
     const fetchOptions = {
       ...options,
-      headers: { 'Accept': 'application/json', ...options.headers },
+      headers: { 'Accept': 'application/json', 'User-Agent': USER_AGENT, ...options.headers },
       signal: AbortSignal.timeout(config.request_timeout_ms || 20000)
     };
     if (agent) {
